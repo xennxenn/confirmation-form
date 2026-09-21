@@ -267,7 +267,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
         </div>
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           <div className="w-full md:w-1/4 border-b md:border-b-0 md:border-r bg-gray-100 p-2 flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-y-auto whitespace-nowrap">
-            {[{id: 'fabrics', label: 'เนื้อผ้าและม่าน'}, {id: 'styles', label: 'รูปแบบม่าน'}, {id: 'masks', label: 'มาสก์หน้างาน'}, {id: 'margins', label: 'ระยะชายม่าน'}, {id: 'tracks', label: 'รางม่าน & ขาจับ'}, {id: 'accessories', label: 'อุปกรณ์เสริม'}].map(t => (
+            {[{id: 'fabrics', label: 'เนื้อผ้าและม่าน'}, {id: 'styles', label: 'รูปแบบม่าน'}, {id: 'masks', label: 'มาสก์หน้างาน'}, {id: 'margins', label: 'ระยะชายม่าน'}, {id: 'tracks', label: 'รางม่าน & ขาจับ'}, {id: 'accessories', label: 'อุปกรณ์เสริม'}, {id: 'pdfTheme', label: '🎨 สีหัวข้อ PDF'}].map(t => (
               <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`text-left px-3 py-2 rounded text-sm shrink-0 ${activeTab===t.id ? 'bg-blue-600 text-white font-bold shadow' : 'hover:bg-gray-200 text-gray-700'}`}>{t.label}</button>
             ))}
           </div>
@@ -505,6 +505,209 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                  )}
               </div>
             )}
+
+            {activeTab === 'pdfTheme' && (() => {
+              const currentTheme = appDB.pdfTheme || {
+                mainHeaderBg: '#374151',
+                mainHeaderText: '#ffffff',
+                subHeaderBg: '#f3f4f6',
+                subHeaderText: '#374151'
+              };
+
+              const updateThemeField = (field: string, val: string) => {
+                setAppDB((prev: any) => ({
+                  ...prev,
+                  pdfTheme: {
+                    ...(prev.pdfTheme || {
+                      mainHeaderBg: '#374151',
+                      mainHeaderText: '#ffffff',
+                      subHeaderBg: '#f3f4f6',
+                      subHeaderText: '#374151'
+                    }),
+                    [field]: val
+                  }
+                }));
+              };
+
+              const presets = [
+                { name: 'เทาคลาสสิก', mainBg: '#374151', mainTxt: '#ffffff', subBg: '#f3f4f6', subTxt: '#374151' },
+                { name: 'น้ำตาลบรอนซ์', mainBg: '#85634D', mainTxt: '#ffffff', subBg: '#F8F3EE', subTxt: '#544033' },
+                { name: 'สีกรมท่า', mainBg: '#1E3A8A', mainTxt: '#ffffff', subBg: '#EFF6FF', subTxt: '#1E3A8A' },
+                { name: 'สีเขียวเข้ม', mainBg: '#065F46', mainTxt: '#ffffff', subBg: '#ECFDF5', subTxt: '#065F46' },
+                { name: 'มิดไนท์แบล็ค', mainBg: '#111827', mainTxt: '#ffffff', subBg: '#F3F4F6', subTxt: '#111827' }
+              ];
+
+              return (
+                <div className="flex flex-col gap-6">
+                  <div className="border-b pb-2">
+                    <h3 className="font-bold text-lg text-blue-700">ตั้งค่าสีหัวข้อไฟล์ PDF (ฝั่งขวา)</h3>
+                    <p className="text-xs text-gray-500 mt-1">สามารถกำหนดโค้ดสีและสีตัวอักษรของหัวข้อหลักและหัวข้อย่อยได้ เมื่อบันทึกแล้วจะอัปเดตและแสดงผลเหมือนกันทุกคน</p>
+                  </div>
+
+                  {/* Presets */}
+                  <div>
+                    <label className="font-bold text-sm block mb-2">ชุดสีสำเร็จรูป (Quick Presets)</label>
+                    <div className="flex flex-wrap gap-2">
+                      {presets.map(p => (
+                        <button
+                          key={p.name}
+                          onClick={() => {
+                            setAppDB((prev: any) => ({
+                              ...prev,
+                              pdfTheme: {
+                                mainHeaderBg: p.mainBg,
+                                mainHeaderText: p.mainTxt,
+                                subHeaderBg: p.subBg,
+                                subHeaderText: p.subTxt
+                              }
+                            }));
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-gray-50 text-xs font-semibold shadow-sm transition-all"
+                        >
+                          <span className="w-4 h-4 rounded-full border shadow-inner" style={{ backgroundColor: p.mainBg }}></span>
+                          <span>{p.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Custom color pickers */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Main Header Setting */}
+                    <div className="bg-gray-50 p-4 border rounded-xl flex flex-col gap-3">
+                      <span className="font-bold text-sm text-gray-800 border-b pb-1">1. หัวข้อหลัก (รายละเอียดการติดตั้ง / หมายเหตุ)</span>
+                      
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 block mb-1">สีพื้นหลังหัวข้อหลัก (Background Color)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={currentTheme.mainHeaderBg || '#374151'}
+                            onChange={e => updateThemeField('mainHeaderBg', e.target.value)}
+                            className="w-9 h-9 p-0.5 border rounded cursor-pointer shrink-0"
+                          />
+                          <input
+                            type="text"
+                            value={currentTheme.mainHeaderBg || '#374151'}
+                            onChange={e => updateThemeField('mainHeaderBg', e.target.value)}
+                            className="border px-3 py-1.5 rounded text-xs font-mono font-bold flex-1 uppercase focus:outline-blue-500 bg-white"
+                            placeholder="#374151"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 block mb-1">สีตัวอักษรหัวข้อหลัก (Text Color)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={currentTheme.mainHeaderText || '#ffffff'}
+                            onChange={e => updateThemeField('mainHeaderText', e.target.value)}
+                            className="w-9 h-9 p-0.5 border rounded cursor-pointer shrink-0"
+                          />
+                          <input
+                            type="text"
+                            value={currentTheme.mainHeaderText || '#ffffff'}
+                            onChange={e => updateThemeField('mainHeaderText', e.target.value)}
+                            className="border px-3 py-1.5 rounded text-xs font-mono font-bold flex-1 uppercase focus:outline-blue-500 bg-white"
+                            placeholder="#FFFFFF"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sub Header Setting */}
+                    <div className="bg-gray-50 p-4 border rounded-xl flex flex-col gap-3">
+                      <span className="font-bold text-sm text-gray-800 border-b pb-1">2. หัวข้อย่อย (จุดที่ติดตั้ง, รูปแบบม่าน, ขนาด, ขาจับราง ฯลฯ)</span>
+                      
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 block mb-1">สีพื้นหลังหัวข้อย่อย (Background Color)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={currentTheme.subHeaderBg || '#f3f4f6'}
+                            onChange={e => updateThemeField('subHeaderBg', e.target.value)}
+                            className="w-9 h-9 p-0.5 border rounded cursor-pointer shrink-0"
+                          />
+                          <input
+                            type="text"
+                            value={currentTheme.subHeaderBg || '#f3f4f6'}
+                            onChange={e => updateThemeField('subHeaderBg', e.target.value)}
+                            className="border px-3 py-1.5 rounded text-xs font-mono font-bold flex-1 uppercase focus:outline-blue-500 bg-white"
+                            placeholder="#F3F4F6"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 block mb-1">สีตัวอักษรหัวข้อย่อย (Text Color)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={currentTheme.subHeaderText || '#374151'}
+                            onChange={e => updateThemeField('subHeaderText', e.target.value)}
+                            className="w-9 h-9 p-0.5 border rounded cursor-pointer shrink-0"
+                          />
+                          <input
+                            type="text"
+                            value={currentTheme.subHeaderText || '#374151'}
+                            onChange={e => updateThemeField('subHeaderText', e.target.value)}
+                            className="border px-3 py-1.5 rounded text-xs font-mono font-bold flex-1 uppercase focus:outline-blue-500 bg-white"
+                            placeholder="#374151"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live Preview */}
+                  <div className="flex flex-col gap-2">
+                    <label className="font-bold text-sm text-gray-700">ตัวอย่างการแสดงผลบน PDF (Preview):</label>
+                    <div className="border border-gray-400 rounded-lg overflow-hidden max-w-sm shadow-sm bg-white">
+                      <div
+                        style={{ backgroundColor: currentTheme.mainHeaderBg, color: currentTheme.mainHeaderText }}
+                        className="text-center font-bold py-2.5 px-3 text-[14px]"
+                      >
+                        รายละเอียดการติดตั้งผ้าม่าน
+                      </div>
+                      <div className="border-b border-gray-300">
+                        <div
+                          style={{ backgroundColor: currentTheme.subHeaderBg, color: currentTheme.subHeaderText }}
+                          className="px-2.5 py-1 text-center font-bold text-[13px]"
+                        >
+                          จุดที่ติดตั้ง
+                        </div>
+                        <div className="px-2.5 py-1 text-black font-semibold text-[12px]">
+                          ห้องนอน 1 / หน้าต่างบานที่ 1
+                        </div>
+                      </div>
+                      <div className="border-b border-gray-300">
+                        <div
+                          style={{ backgroundColor: currentTheme.subHeaderBg, color: currentTheme.subHeaderText }}
+                          className="px-2.5 py-1 text-center font-bold text-[13px]"
+                        >
+                          ขาจับราง
+                        </div>
+                        <div className="px-2.5 py-1 text-black font-semibold text-[12px]">
+                          ติดเพดาน
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          style={{ backgroundColor: currentTheme.subHeaderBg, color: currentTheme.subHeaderText }}
+                          className="px-2.5 py-1 text-center font-bold text-[13px]"
+                        >
+                          รางม่าน
+                        </div>
+                        <div className="px-2.5 py-1 text-black font-semibold text-[12px]">
+                          - รางม่านลอนไข่ปลา
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
         <div className="p-4 border-t bg-gray-50 flex flex-wrap justify-between items-center gap-2">

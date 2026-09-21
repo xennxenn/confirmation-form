@@ -101,7 +101,13 @@ export const DEFAULT_DB = {
     top: ['ติดกล่องบังราง', 'ติดเพดาน', 'บวกจากขอบเฟรม 10 ซม.', 'ระบุเอง...'],
     bottom: ['ลอยจากพื้น 1 ซม.', 'ลอยจากพื้น 2 ซม.', 'พอดีพื้น', 'คลุมบัวพื้น', 'ระบุเอง...']
   },
-  marginImages: {} as Record<string, string>
+  marginImages: {} as Record<string, string>,
+  pdfTheme: {
+    mainHeaderBg: '#374151',
+    mainHeaderText: '#ffffff',
+    subHeaderBg: '#f3f4f6',
+    subHeaderText: '#374151'
+  }
 };
 
 export const DEFAULT_ACCOUNTS: Account[] = [
