@@ -692,7 +692,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                           ติดเพดาน
                         </div>
                       </div>
-                      <div>
+                      <div className="border-b border-gray-300">
                         <div
                           style={{ backgroundColor: currentTheme.subHeaderBg, color: currentTheme.subHeaderText }}
                           className="px-2.5 py-1 text-center font-bold text-[13px]"
@@ -701,6 +701,19 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                         </div>
                         <div className="px-2.5 py-1 text-black font-semibold text-[12px]">
                           - รางม่านลอนไข่ปลา
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          style={{ backgroundColor: currentTheme.subHeaderBg, color: currentTheme.subHeaderText }}
+                          className="px-2.5 py-1 text-center font-bold text-[13px]"
+                        >
+                          ระยะการเผื่อม่าน
+                        </div>
+                        <div className="px-2.5 py-1 text-black font-semibold text-[12px] flex flex-col gap-0.5">
+                          <span>ด้านซ้าย : +10 ซม.</span>
+                          <span>ด้านขวา : +10 ซม.</span>
+                          <span>ด้านบน : +10 ซม.</span>
                         </div>
                       </div>
                     </div>

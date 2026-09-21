@@ -904,14 +904,12 @@ const App: React.FC = () => {
             })();
 
             const trackLines = (() => {
-              const tracks = (item.tracks || []).filter((t: string) => t && t !== '-');
-              if (tracks.length === 0) return ['-'];
+              const tracks = (item.tracks || []).filter((t: string) => t && t.trim() !== '' && t.trim() !== '-');
               return tracks.map((t: string) => `- ${t.replace(/^-\s*/, '')}`);
             })();
 
             const accessoryLines = (() => {
-              const accs = (item.accessories || []).filter((a: string) => a && a !== '-');
-              if (accs.length === 0) return ['-'];
+              const accs = (item.accessories || []).filter((a: string) => a && a.trim() !== '' && a.trim() !== '-');
               return accs.map((a: string) => `- ${a.replace(/^-\s*/, '')}`);
             })();
 
@@ -933,13 +931,11 @@ const App: React.FC = () => {
               const left = getVal('marginLeft', 'customMarginLeft');
               const right = getVal('marginRight', 'customMarginRight');
               const top = getVal('marginTop', 'customMarginTop');
-              const bottom = getVal('marginBottom', 'customMarginBottom');
 
               const lines: string[] = [];
               if (left) lines.push(`ด้านซ้าย : ${left}`);
               if (right) lines.push(`ด้านขวา : ${right}`);
               if (top) lines.push(`ด้านบน : ${top}`);
-              if (bottom) lines.push(`ด้านล่าง : ${bottom}`);
 
               if (lines.length === 0) return ['-'];
               return lines;
@@ -1123,7 +1119,7 @@ const App: React.FC = () => {
                       {/* ========================================================================= */}
                       <div className="hidden print-flex flex-col w-full h-full p-2 bg-white box-border overflow-hidden gap-2.5">
                         {/* Card 1: รายละเอียดการติดตั้งผ้าม่าน */}
-                        <div className="border border-gray-400 rounded-lg overflow-hidden bg-white shadow-none w-full flex flex-col shrink-0">
+                        <div className="border border-gray-400 rounded-lg overflow-hidden bg-white shadow-none w-full flex flex-col shrink-0 divide-y divide-gray-300">
                           {/* Header banner */}
                           <div 
                             style={{ backgroundColor: pdfTheme.mainHeaderBg, color: pdfTheme.mainHeaderText }}
@@ -1133,7 +1129,7 @@ const App: React.FC = () => {
                           </div>
                           
                           {/* 1. จุดที่ติดตั้ง */}
-                          <div className="border-b border-gray-300">
+                          <div>
                             <div 
                               style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
                               className="px-2.5 py-1 text-center font-bold text-[13px]"
@@ -1146,7 +1142,7 @@ const App: React.FC = () => {
                           </div>
 
                           {/* 2. รูปแบบผ้าม่าน */}
-                          <div className="border-b border-gray-300">
+                          <div>
                             <div 
                               style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
                               className="px-2.5 py-1 text-center font-bold text-[13px]"
@@ -1161,7 +1157,7 @@ const App: React.FC = () => {
                           </div>
 
                           {/* 3. ขนาด */}
-                          <div className="border-b border-gray-300">
+                          <div>
                             <div 
                               style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
                               className="px-2.5 py-1 text-center font-bold text-[13px]"
@@ -1176,7 +1172,7 @@ const App: React.FC = () => {
                           </div>
 
                           {/* 4. ขาจับราง */}
-                          <div className="border-b border-gray-300">
+                          <div>
                             <div 
                               style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
                               className="px-2.5 py-1 text-center font-bold text-[13px]"
@@ -1189,7 +1185,7 @@ const App: React.FC = () => {
                           </div>
 
                           {/* 5. การแขวน */}
-                          <div className="border-b border-gray-300">
+                          <div>
                             <div 
                               style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
                               className="px-2.5 py-1 text-center font-bold text-[13px]"
@@ -1201,35 +1197,56 @@ const App: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* 6. รางม่าน */}
-                          <div className="border-b border-gray-300">
-                            <div 
-                              style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
-                              className="px-2.5 py-1 text-center font-bold text-[13px]"
-                            >
-                              รางม่าน
+                          {/* 6. รางม่าน (ซ่อนถ้าไม่มีข้อมูล) */}
+                          {trackLines.length > 0 && (
+                            <div>
+                              <div 
+                                style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
+                                className="px-2.5 py-1 text-center font-bold text-[13px]"
+                              >
+                                รางม่าน
+                              </div>
+                              <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
+                                {trackLines.map((line: string, tIdx: number) => (
+                                  <span key={tIdx} className="block">{line}</span>
+                                ))}
+                              </div>
                             </div>
-                            <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
-                              {trackLines.map((line: string, tIdx: number) => (
-                                <span key={tIdx} className="block">{line}</span>
-                              ))}
-                            </div>
-                          </div>
+                          )}
 
-                          {/* 7. อุปกรณ์เสริม */}
-                          <div>
-                            <div 
-                              style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
-                              className="px-2.5 py-1 text-center font-bold text-[13px]"
-                            >
-                              อุปกรณ์เสริม
+                          {/* 7. อุปกรณ์เสริม (ซ่อนถ้าไม่มีข้อมูล) */}
+                          {accessoryLines.length > 0 && (
+                            <div>
+                              <div 
+                                style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
+                                className="px-2.5 py-1 text-center font-bold text-[13px]"
+                              >
+                                อุปกรณ์เสริม
+                              </div>
+                              <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
+                                {accessoryLines.map((line: string, acIdx: number) => (
+                                  <span key={acIdx} className="block">{line}</span>
+                                ))}
+                              </div>
                             </div>
-                            <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
-                              {accessoryLines.map((line: string, acIdx: number) => (
-                                <span key={acIdx} className="block">{line}</span>
-                              ))}
+                          )}
+
+                          {/* 8. ระยะการเผื่อม่าน (ด้านซ้าย ด้านขวา ด้านบน) */}
+                          {marginLines.length > 0 && (
+                            <div>
+                              <div 
+                                style={{ backgroundColor: pdfTheme.subHeaderBg, color: pdfTheme.subHeaderText }}
+                                className="px-2.5 py-1 text-center font-bold text-[13px]"
+                              >
+                                ระยะการเผื่อม่าน
+                              </div>
+                              <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
+                                {marginLines.map((line: string, mIdx: number) => (
+                                  <span key={mIdx} className="block">{line}</span>
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
 
                         {/* Card 2: หมายเหตุ (ขอบมน แยกจากรายละเอียดการติดตั้ง และยืดหยุ่นเต็มพื้นที่ที่เหลือ) */}
