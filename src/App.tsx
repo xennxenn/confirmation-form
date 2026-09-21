@@ -677,12 +677,16 @@ const App: React.FC = () => {
               <div className="p-4 border border-gray-300 rounded-md bg-gray-50">
                 <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 inline-block text-base text-gray-800">ส่วนผู้จัดทำ</h2>
                 <div className="space-y-2.5 text-xs">
-                  <div className="flex items-center"><span className="w-36 font-bold text-gray-700">วันที่วัดพื้นที่ :</span><input type="date" name="surveyDate" value={generalInfo.surveyDate} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 bg-transparent h-7" /></div>
-                  <div className="flex items-center"><span className="w-36 font-bold text-gray-700">วันที่คอนเฟิร์ม :</span><input type="date" name="confirmDate" value={generalInfo.confirmDate} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 bg-transparent h-7" /></div>
-                  <div className="flex flex-col"><span className="font-bold mb-1 text-gray-700">วันที่ติดตั้งผ้าม่าน :</span>
-                    <div className="flex flex-wrap gap-1.5 items-center min-h-[28px] border-b border-gray-300 pb-1">
-                      {generalInfo.installDates.length > 0 ? generalInfo.installDates.map((d, i) => (<span key={i} className="bg-white px-2 py-0.5 rounded border shadow-sm flex items-center font-bold text-blue-800 print:text-black">{d} <span className="mx-1 print-hidden no-print font-normal text-gray-400">/</span><X size={12} className="ml-1 cursor-pointer text-red-500 no-print hover:bg-red-100 rounded-full" onClick={() => removeInstallDate(d)}/></span>)) : <span className="text-gray-400 italic no-print text-[11px]">ยังไม่ได้ระบุ</span>}
-                      <div className="flex items-center ml-auto no-print"><input type="date" value={tempInstallDate} onChange={(e)=>setTempInstallDate(e.target.value)} className="border rounded px-2 py-1 text-xs outline-none focus:border-blue-500 bg-white h-7"/><button onClick={addInstallDate} className="bg-blue-100 text-blue-700 p-1.5 rounded ml-1 hover:bg-blue-200 transition-colors h-7 w-7 flex items-center justify-center font-bold text-sm">+</button></div>
+                  <div className="flex items-center"><span className="w-36 font-bold text-gray-700">วันที่วัดพื้นที่ :</span><input type="date" name="surveyDate" value={generalInfo.surveyDate} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.surveyDate || '-'}</div></div>
+                  <div className="flex items-center"><span className="w-36 font-bold text-gray-700">วันที่คอนเฟิร์ม :</span><input type="date" name="confirmDate" value={generalInfo.confirmDate} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.confirmDate || '-'}</div></div>
+                  <div className="flex items-center">
+                    <span className="w-36 font-bold text-gray-700">วันที่ติดตั้งผ้าม่าน :</span>
+                    <div className="flex-1 flex flex-wrap gap-1.5 items-center min-h-[28px] border-b border-gray-300 pb-1 print-hidden">
+                      {generalInfo.installDates.length > 0 ? generalInfo.installDates.map((d, i) => (<span key={i} className="bg-white px-2 py-0.5 rounded border shadow-sm flex items-center font-bold text-blue-800">{d} <X size={12} className="ml-1 cursor-pointer text-red-500 hover:bg-red-100 rounded-full" onClick={() => removeInstallDate(d)}/></span>)) : <span className="text-gray-400 italic text-[11px]">ยังไม่ได้ระบุ</span>}
+                      <div className="flex items-center ml-auto"><input type="date" value={tempInstallDate} onChange={(e)=>setTempInstallDate(e.target.value)} className="border rounded px-2 py-0.5 text-xs outline-none focus:border-blue-500 bg-white h-7"/><button onClick={addInstallDate} className="bg-blue-100 text-blue-700 p-1 rounded ml-1 hover:bg-blue-200 transition-colors h-7 w-7 flex items-center justify-center font-bold text-sm">+</button></div>
+                    </div>
+                    <div className="hidden print-block font-bold text-[14px] text-black flex-1">
+                      {generalInfo.installDates.length > 0 ? generalInfo.installDates.join(', ') : '-'}
                     </div>
                   </div>
                   <div className="flex flex-col"><span className="font-bold text-gray-700">สถานที่ติดตั้ง :</span><textarea name="location" value={generalInfo.location} onChange={handleGeneralChange} rows={2} className="w-full border border-gray-300 rounded p-2 mt-1 outline-none focus:border-blue-500 print-hidden resize-none bg-white text-xs font-medium"></textarea><div className="hidden print-block w-full mt-1 text-[15px] font-bold whitespace-pre-wrap text-black border-b border-gray-300 pb-1">{generalInfo.location || '-'}</div></div>
@@ -702,10 +706,10 @@ const App: React.FC = () => {
               <div className="p-4 border border-gray-300 rounded-md bg-blue-50/30 flex flex-col">
                 <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 inline-block text-base text-gray-800">ส่วนลูกค้า</h2>
                 <div className="space-y-2.5">
-                  <div className="flex items-center"><span className="w-32 font-bold text-gray-700">ชื่อ-นามสกุล :</span><input type="text" name="customerName" value={generalInfo.customerName} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-bold text-blue-800 text-[15px] print:text-black bg-transparent h-7" /></div>
-                  <div className="flex items-center"><span className="w-32 font-bold text-gray-700">เบอร์ติดต่อ :</span><input type="text" name="customerPhone" value={generalInfo.customerPhone} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7" /></div>
-                  <div className="flex items-center mt-4"><span className="w-32 font-bold text-gray-700">ผู้ติดต่อแทน :</span><input type="text" name="agentName" value={generalInfo.agentName} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7" /></div>
-                  <div className="flex items-center"><span className="w-32 font-bold text-gray-700">เบอร์ติดต่อ :</span><input type="text" name="agentPhone" value={generalInfo.agentPhone} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7" /></div>
+                  <div className="flex items-center"><span className="w-32 font-bold text-gray-700">ชื่อ-นามสกุล :</span><input type="text" name="customerName" value={generalInfo.customerName} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-bold text-blue-800 text-[15px] print-hidden bg-transparent h-7" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.customerName || '-'}</div></div>
+                  <div className="flex items-center"><span className="w-32 font-bold text-gray-700">เบอร์ติดต่อ :</span><input type="text" name="customerPhone" value={generalInfo.customerPhone} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.customerPhone || '-'}</div></div>
+                  <div className="flex items-center mt-4"><span className="w-32 font-bold text-gray-700">ผู้ติดต่อแทน :</span><input type="text" name="agentName" value={generalInfo.agentName} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.agentName || '-'}</div></div>
+                  <div className="flex items-center"><span className="w-32 font-bold text-gray-700">เบอร์ติดต่อ :</span><input type="text" name="agentPhone" value={generalInfo.agentPhone} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.agentPhone || '-'}</div></div>
                 </div>
                 <div className="mt-auto pt-8 text-center flex flex-col items-center justify-end h-24">
                   <p className="border-b border-gray-400 w-48 mx-auto mb-1"></p>
@@ -852,6 +856,85 @@ const App: React.FC = () => {
 
             const marginDisplayText = bottomMargin || '-';
 
+            const curtainStyleLines = (() => {
+              const primaryArea = item.areas[0] || {};
+              const s1 = primaryArea.styleMain1 || item.styleMain1 || item.styleMain || '';
+              const a1 = primaryArea.styleAction1 || item.styleAction1 || item.styleAction || '';
+              const s2 = primaryArea.styleMain2 || item.styleMain2 || '';
+              const a2 = primaryArea.styleAction2 || item.styleAction2 || '';
+
+              const part1 = [s1, a1].filter(Boolean).join(' / ');
+              const part2 = [s2, a2].filter(Boolean).join(' / ');
+
+              if (item.layers === 1) {
+                return [part1 ? `ม่าน 1 ชั้น - ${part1}` : (s1 ? `ม่าน 1 ชั้น - ${s1}` : '-')];
+              }
+
+              if (part1 && part2 && part1 === part2) {
+                return [`ม่าน 2 ชั้น - ${part1}`];
+              }
+
+              const lines: string[] = [];
+              if (part1) lines.push(`ม่านชั้น 1 - ${part1}`);
+              if (part2) lines.push(`ม่านชั้น 2 - ${part2}`);
+
+              if (lines.length === 0) return ['-'];
+              return lines;
+            })();
+
+            const areaSizesLines = (() => {
+              if (!item.areas || item.areas.length === 0) return ['-'];
+              return item.areas.map((area: any, idx: number) => {
+                const w = area.width ? `${area.width}` : '-';
+                const h = area.height ? `${area.height}` : '-';
+                return `บานที่ ${idx + 1} - ${w} x ${h} ซม.`;
+              });
+            })();
+
+            const installationText = (() => {
+              const b = item.bracket && item.bracket !== '-' ? item.bracket : '';
+              const h = item.hangStyle && item.hangStyle !== '-' ? item.hangStyle : '';
+              if (b && h) return `${b} / ${h}`;
+              if (b) return b;
+              if (h) return h;
+              return '-';
+            })();
+
+            const trackLines = (() => {
+              const tracks = (item.tracks || []).filter((t: string) => t && t !== '-');
+              if (tracks.length === 0) return ['-'];
+              return tracks;
+            })();
+
+            const accessoryLines = (() => {
+              const accs = (item.accessories || []).filter((a: string) => a && a !== '-');
+              if (accs.length === 0) return ['-'];
+              return accs;
+            })();
+
+            const marginLines = (() => {
+              const getVal = (field: string, customField: string) => {
+                const v = (item as any)[field];
+                if (!v || v === '-') return '-';
+                if (v === 'ระบุเอง...') return (item as any)[customField] || '-';
+                return v;
+              };
+
+              const left = getVal('marginLeft', 'customMarginLeft');
+              const right = getVal('marginRight', 'customMarginRight');
+              const top = getVal('marginTop', 'customMarginTop');
+              const bottom = getVal('marginBottom', 'customMarginBottom');
+
+              const hasHoriz = left !== '-' || right !== '-';
+              const hasVert = top !== '-' || bottom !== '-';
+
+              if (!hasHoriz && !hasVert) return ['-'];
+
+              const line1 = `ซ้าย ${left}  +  ขวา ${right}`;
+              const line2 = `บน ${top}  /  ล่าง ${bottom}`;
+              return [line1, line2];
+            })();
+
             return (
               <div key={item.id} className="print-center-page w-full relative mb-10 print:mb-0">
                 <div className="print-content-wrapper w-full border-2 border-gray-800 p-1 relative rounded bg-white hover:z-50 transition-all duration-300 shadow-sm hover:shadow-md">
@@ -864,13 +947,16 @@ const App: React.FC = () => {
                     <button onClick={() => removeItem(item.id)} className="bg-red-500 text-white rounded-full p-2 hover:bg-red-600 shadow-md transition-transform hover:scale-110" title="ลบ"><Trash2 size={16} /></button>
                   </div>
 
-                  <div className="border border-gray-300 flex flex-col lg:flex-row print:flex-row h-auto lg:h-[750px] print:h-[185mm] mt-8 md:mt-0 bg-white relative overflow-hidden w-full box-border">
-                    <div className="w-full lg:w-[70%] print:w-[70%] min-h-[400px] h-[50vh] sm:h-[60vh] lg:h-full print:h-full border-b lg:border-b-0 print:border-b-0 lg:border-r print:border-r border-gray-300 flex flex-col bg-white relative z-20">
+                  <div className="border border-gray-300 print:border-2 print:border-gray-800 flex flex-col lg:flex-row print:flex-row h-auto lg:h-[750px] print:h-[185mm] mt-8 md:mt-0 bg-white relative overflow-hidden w-full box-border">
+                    {/* Left Column (70%) */}
+                    <div className="w-full lg:w-[70%] print:w-[70%] min-h-[400px] h-[50vh] sm:h-[60vh] lg:h-full print:h-full border-b lg:border-b-0 print:border-b-0 lg:border-r print:border-r-2 print:border-gray-800 border-gray-300 flex flex-col bg-white relative z-20">
                       
-                      <div className="flex-1 w-full border-b border-gray-300 flex flex-col relative bg-gray-100 shrink-0 overflow-hidden">
+                      {/* Site photo area (รูปหน้างาน) */}
+                      <div className="flex-1 w-full border-b print:border-b-2 print:border-gray-800 border-gray-300 flex flex-col relative bg-gray-100 shrink-0 overflow-hidden">
                         <ImageAreaEditor item={item} appDB={appDB} handleItemChange={handleItemChange} setDialog={setDialog} idPrefix={`print-${index}`} generalInfo={generalInfo} itemIndex={index + 1} />
                       </div>
                       
+                      {/* Sample photo area (รูปตัวอย่าง) */}
                       <div className="h-[25%] lg:h-[30%] print:h-[30%] min-h-[100px] w-full p-2 bg-gray-50 flex items-center overflow-x-auto">
                         <div className="w-full h-full min-w-[350px] md:min-w-[400px] grid grid-cols-4 gap-1.5 sm:gap-2 print:gap-4">
                           <InfoCard title="รูปแบบม่าน" imgUrl={styleImg1} text1={`${sMain1 || '-'} ${item.layers === 2 ? `/ ${sMain2 || '-'}` : ''}`} fallbackType="style" />
@@ -899,134 +985,230 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="w-full lg:w-[30%] print:w-[30%] text-xs flex flex-col bg-white overflow-y-auto print:overflow-visible min-h-[400px] lg:h-full print:h-auto relative z-10 print:justify-start">
-                      <div className="bg-gray-800 text-white p-3 print:bg-white print:text-black print:p-3 print:pb-0 flex flex-col shrink-0">
-                        <span className="mb-1 text-gray-300 print-hidden font-bold text-xs">ห้อง / ตำแหน่ง :</span>
-                        <textarea value={item.roomPos} onChange={(e)=>handleItemChange(item.id, 'roomPos', e.target.value)} className="w-full bg-transparent outline-none border-b border-gray-500 focus:border-white resize-none text-sm font-bold leading-tight print-hidden placeholder-gray-400 text-yellow-300" placeholder="ระบุห้อง เช่น ชั้น 1 / โถงกลม บานที่ 1" rows={2} />
-                        <div className="hidden print-block w-full text-[15px] font-bold leading-tight text-black whitespace-pre-wrap border-b border-gray-800 pb-2 mb-1">{item.roomPos || '-'}</div>
-                      </div>
+                    {/* Right Column (30%) */}
+                    <div className="w-full lg:w-[30%] print:w-[30%] text-xs flex flex-col bg-white overflow-y-auto print:overflow-hidden min-h-[400px] lg:h-full print:h-[185mm] relative z-10 print:justify-start">
                       
-                      <div className="p-3 print:p-2 flex flex-col justify-start gap-4 print:gap-3 h-full print:h-auto print:justify-start">
-                        <div className="border border-gray-300 p-2 rounded bg-gray-50 no-print">
-                          <div className="flex justify-between items-center mb-2 border-b border-gray-300 pb-1">
-                            <span className="font-bold text-gray-800 text-[14px]">รายละเอียดวัสดุ/ผ้า</span>
-                            <button onClick={()=>setShowCustomFabricModal(true)} className="no-print bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border border-indigo-200 px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors flex items-center h-6"><Plus size={12} className="mr-0.5"/> ผ้านอกระบบ</button>
-                          </div>
-                          {item.areas.length === 0 && <span className="text-gray-400 italic no-print text-xs">เพิ่มพื้นที่บนรูปหน้างานก่อน</span>}
-                          {item.areas.map((area: any, aIdx: number) => (
-                            <div className="mb-3 border-l-[3px] border-blue-500 pl-2 pb-2 border-b border-gray-200" key={area.id}>
-                              <div className="font-bold text-blue-800 mb-1.5 flex justify-between items-center bg-blue-50 px-1.5 py-1 rounded text-[12px]">
-                                <span>บานที่ {aIdx + 1} <span className="font-normal">(ก:{area.width||'-'} ส:{area.height||'-'})</span></span>
-                                {area.fabrics.length < (item.layers || 2) && <button onClick={()=>addFabricToArea(item.id, area.id)} className="text-blue-600 hover:text-blue-800 no-print flex items-center bg-white px-2 py-0.5 border border-blue-200 shadow-sm rounded text-[10px] transition-colors"><Plus size={12} className="mr-0.5"/> เพิ่มผ้า</button>}
-                              </div>
-                              {area.fabrics.map((fab: any) => <FabricSelector key={fab.id} item={item} area={area} fab={fab} appDB={appDB} generalInfo={generalInfo} updateFabric={updateFabric} removeFabric={removeFabric} />)}
-                              <div className="flex flex-col gap-1.5 mt-2 bg-indigo-50/50 p-2 rounded border border-indigo-100">
-                                <span className="font-bold text-[10px] text-indigo-800 mb-0.5">รูปแบบการทำงาน (กำหนดเฉพาะบานนี้)</span>
-                                <div className="flex gap-1.5 items-center">
-                                  <span className="text-[10px] font-bold text-gray-500 w-10 shrink-0">ชั้นที่ 1:</span>
-                                  <select value={area.styleMain1 || ''} onChange={(e)=>updateAreaField(item.id, area.id, 'styleMain1', e.target.value)} className="w-[45%] border-b border-gray-300 outline-none text-[11px] bg-transparent font-bold text-gray-700 h-7"><option value="">-ตามเริ่มต้น-</option>{(appDB.styles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
-                                  <select value={area.styleAction1 || ''} onChange={(e)=>updateAreaField(item.id, area.id, 'styleAction1', e.target.value)} className="w-[45%] border-b border-gray-300 outline-none text-[11px] bg-transparent font-bold text-gray-700 h-7"><option value="">-ตามเริ่มต้น-</option>{(appDB.actions || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                      {/* ========================================================================= */}
+                      {/* WEB EDITOR VIEW (Preserved exactly as is - ไม่ต้องแก้ที่หน้ากรอกข้อมูล) */}
+                      {/* ========================================================================= */}
+                      <div className="no-print flex flex-col h-full overflow-y-auto">
+                        <div className="bg-gray-800 text-white p-3 flex flex-col shrink-0">
+                          <span className="mb-1 text-gray-300 font-bold text-xs">ห้อง / ตำแหน่ง :</span>
+                          <textarea value={item.roomPos} onChange={(e)=>handleItemChange(item.id, 'roomPos', e.target.value)} className="w-full bg-transparent outline-none border-b border-gray-500 focus:border-white resize-none text-sm font-bold leading-tight placeholder-gray-400 text-yellow-300" placeholder="ระบุห้อง เช่น ชั้น 1 / โถงกลม บานที่ 1" rows={2} />
+                        </div>
+                        
+                        <div className="p-3 flex flex-col justify-start gap-4 h-full">
+                          <div className="border border-gray-300 p-2 rounded bg-gray-50">
+                            <div className="flex justify-between items-center mb-2 border-b border-gray-300 pb-1">
+                              <span className="font-bold text-gray-800 text-[14px]">รายละเอียดวัสดุ/ผ้า</span>
+                              <button onClick={()=>setShowCustomFabricModal(true)} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border border-indigo-200 px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors flex items-center h-6"><Plus size={12} className="mr-0.5"/> ผ้านอกระบบ</button>
+                            </div>
+                            {item.areas.length === 0 && <span className="text-gray-400 italic text-xs">เพิ่มพื้นที่บนรูปหน้างานก่อน</span>}
+                            {item.areas.map((area: any, aIdx: number) => (
+                              <div className="mb-3 border-l-[3px] border-blue-500 pl-2 pb-2 border-b border-gray-200" key={area.id}>
+                                <div className="font-bold text-blue-800 mb-1.5 flex justify-between items-center bg-blue-50 px-1.5 py-1 rounded text-[12px]">
+                                  <span>บานที่ {aIdx + 1} <span className="font-normal">(ก:{area.width||'-'} ส:{area.height||'-'})</span></span>
+                                  {area.fabrics.length < (item.layers || 2) && <button onClick={()=>addFabricToArea(item.id, area.id)} className="text-blue-600 hover:text-blue-800 flex items-center bg-white px-2 py-0.5 border border-blue-200 shadow-sm rounded text-[10px] transition-colors"><Plus size={12} className="mr-0.5"/> เพิ่มผ้า</button>}
                                 </div>
-                                {item.layers === 2 && (
-                                  <div className="flex gap-1.5 items-center mt-1">
-                                    <span className="text-[10px] font-bold text-gray-500 w-10 shrink-0">ชั้นที่ 2:</span>
-                                    <select value={area.styleMain2 || ''} onChange={(e)=>updateAreaField(item.id, area.id, 'styleMain2', e.target.value)} className="w-[45%] border-b border-gray-300 outline-none text-[11px] bg-transparent font-bold text-gray-700 h-7"><option value="">-ตามเริ่มต้น-</option>{(appDB.styles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
-                                    <select value={area.styleAction2 || ''} onChange={(e)=>updateAreaField(item.id, area.id, 'styleAction2', e.target.value)} className="w-[45%] border-b border-gray-300 outline-none text-[11px] bg-transparent font-bold text-gray-700 h-7"><option value="">-ตามเริ่มต้น-</option>{(appDB.actions || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                                {area.fabrics.map((fab: any) => <FabricSelector key={fab.id} item={item} area={area} fab={fab} appDB={appDB} generalInfo={generalInfo} updateFabric={updateFabric} removeFabric={removeFabric} />)}
+                                <div className="flex flex-col gap-1.5 mt-2 bg-indigo-50/50 p-2 rounded border border-indigo-100">
+                                  <span className="font-bold text-[10px] text-indigo-800 mb-0.5">รูปแบบการทำงาน (กำหนดเฉพาะบานนี้)</span>
+                                  <div className="flex gap-1.5 items-center">
+                                    <span className="text-[10px] font-bold text-gray-500 w-10 shrink-0">ชั้นที่ 1:</span>
+                                    <select value={area.styleMain1 || ''} onChange={(e)=>updateAreaField(item.id, area.id, 'styleMain1', e.target.value)} className="w-[45%] border-b border-gray-300 outline-none text-[11px] bg-transparent font-bold text-gray-700 h-7"><option value="">-ตามเริ่มต้น-</option>{(appDB.styles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                                    <select value={area.styleAction1 || ''} onChange={(e)=>updateAreaField(item.id, area.id, 'styleAction1', e.target.value)} className="w-[45%] border-b border-gray-300 outline-none text-[11px] bg-transparent font-bold text-gray-700 h-7"><option value="">-ตามเริ่มต้น-</option>{(appDB.actions || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
                                   </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="hidden print-block w-full mt-2">
-                          <span className="font-bold text-gray-800 text-[14px] border-b border-gray-800 pb-1 mb-2 block">รูปแบบและขนาดม่าน</span>
-                          {getGroupedAreas(item).map((grp, gIdx) => (
-                             <div key={gIdx} className="mb-3 pl-2 border-l-[3px] border-gray-800">
-                                <span className="font-bold text-black text-[13px] block mb-1">{formatBaanLabel(grp.labelNums, item.areas.length)} : <span className="font-normal">ก:{grp.w} ส:{grp.h}</span></span>
-                                <div className="text-[12px] leading-snug">
-                                   <span className="text-gray-800 block"><span className="font-bold">ชั้นที่ 1:</span> {grp.s1} {grp.a1 !== '-' ? `/ ${grp.a1}` : ''}</span>
-                                   {item.layers === 2 && <span className="text-gray-800 block mt-0.5"><span className="font-bold">ชั้นที่ 2:</span> {grp.s2} {grp.a2 !== '-' ? `/ ${grp.a2}` : ''}</span>}
+                                  {item.layers === 2 && (
+                                    <div className="flex gap-1.5 items-center mt-1">
+                                      <span className="text-[10px] font-bold text-gray-500 w-10 shrink-0">ชั้นที่ 2:</span>
+                                      <select value={area.styleMain2 || ''} onChange={(e)=>updateAreaField(item.id, area.id, 'styleMain2', e.target.value)} className="w-[45%] border-b border-gray-300 outline-none text-[11px] bg-transparent font-bold text-gray-700 h-7"><option value="">-ตามเริ่มต้น-</option>{(appDB.styles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                                      <select value={area.styleAction2 || ''} onChange={(e)=>updateAreaField(item.id, area.id, 'styleAction2', e.target.value)} className="w-[45%] border-b border-gray-300 outline-none text-[11px] bg-transparent font-bold text-gray-700 h-7"><option value="">-ตามเริ่มต้น-</option>{(appDB.actions || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                                    </div>
+                                  )}
                                 </div>
-                             </div>
-                          ))}
-                        </div>
+                              </div>
+                            ))}
+                          </div>
 
-                        <div className="flex flex-col gap-3 py-1 flex-1 justify-start">
-                          <div className="flex flex-col print-hidden">
-                            <span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">รูปแบบพิมพ์สรุป (ค่าเริ่มต้นทั้งหมด)</span>
-                            <div className="flex items-center gap-4 mb-2 bg-gray-100 p-1.5 rounded">
-                              <span className="text-[11px] font-bold text-gray-600">จำนวนชั้นม่าน:</span>
-                              <label className="flex items-center gap-1 text-[11px] cursor-pointer font-bold"><input type="radio" checked={item.layers === 1} onChange={()=>handleLayerChange(item.id, 1)}/> 1 ชั้น</label>
-                              <label className="flex items-center gap-1 text-[11px] cursor-pointer font-bold"><input type="radio" checked={item.layers !== 1} onChange={()=>handleLayerChange(item.id, 2)}/> 2 ชั้น</label>
-                            </div>
-                            <div className="flex gap-1.5 items-center mt-0.5">
-                              {item.layers !== 1 && <span className="text-[10px] font-bold text-gray-500 w-10 shrink-0">ชั้นที่ 1:</span>}
-                              <select value={item.styleMain1 || item.styleMain || ''} onChange={(e)=>handleItemChange(item.id, 'styleMain1', e.target.value)} className="w-[45%] border-b border-gray-400 outline-none bg-transparent text-blue-800 font-bold text-xs h-7"><option value="">-รูปแบบ-</option>{(appDB.styles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
-                              <span className="text-gray-400 font-bold">/</span>
-                              <select value={item.styleAction1 || item.styleAction || ''} onChange={(e)=>handleItemChange(item.id, 'styleAction1', e.target.value)} className="w-[45%] border-b border-gray-400 outline-none bg-transparent text-blue-800 font-bold text-xs h-7"><option value="">-เปิดปิด-</option>{(appDB.actions || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
-                            </div>
-                            {item.layers !== 1 && (
-                              <div className="flex gap-1.5 items-center mt-1.5">
-                                <span className="text-[10px] font-bold text-gray-500 w-10 shrink-0">ชั้นที่ 2:</span>
-                                <select value={item.styleMain2 || ''} onChange={(e)=>handleItemChange(item.id, 'styleMain2', e.target.value)} className="w-[45%] border-b border-gray-400 outline-none bg-transparent text-blue-800 font-bold text-xs h-7"><option value="">-รูปแบบ-</option>{(appDB.styles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                          <div className="flex flex-col gap-3 py-1 flex-1 justify-start">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">รูปแบบพิมพ์สรุป (ค่าเริ่มต้นทั้งหมด)</span>
+                              <div className="flex items-center gap-4 mb-2 bg-gray-100 p-1.5 rounded">
+                                <span className="text-[11px] font-bold text-gray-600">จำนวนชั้นม่าน:</span>
+                                <label className="flex items-center gap-1 text-[11px] cursor-pointer font-bold"><input type="radio" checked={item.layers === 1} onChange={()=>handleLayerChange(item.id, 1)}/> 1 ชั้น</label>
+                                <label className="flex items-center gap-1 text-[11px] cursor-pointer font-bold"><input type="radio" checked={item.layers !== 1} onChange={()=>handleLayerChange(item.id, 2)}/> 2 ชั้น</label>
+                              </div>
+                              <div className="flex gap-1.5 items-center mt-0.5">
+                                {item.layers !== 1 && <span className="text-[10px] font-bold text-gray-500 w-10 shrink-0">ชั้นที่ 1:</span>}
+                                <select value={item.styleMain1 || item.styleMain || ''} onChange={(e)=>handleItemChange(item.id, 'styleMain1', e.target.value)} className="w-[45%] border-b border-gray-400 outline-none bg-transparent text-blue-800 font-bold text-xs h-7"><option value="">-รูปแบบ-</option>{(appDB.styles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
                                 <span className="text-gray-400 font-bold">/</span>
-                                <select value={item.styleAction2 || ''} onChange={(e)=>handleItemChange(item.id, 'styleAction2', e.target.value)} className="w-[45%] border-b border-gray-400 outline-none bg-transparent text-blue-800 font-bold text-xs h-7"><option value="">-เปิดปิด-</option>{(appDB.actions || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                                <select value={item.styleAction1 || item.styleAction || ''} onChange={(e)=>handleItemChange(item.id, 'styleAction1', e.target.value)} className="w-[45%] border-b border-gray-400 outline-none bg-transparent text-blue-800 font-bold text-xs h-7"><option value="">-เปิดปิด-</option>{(appDB.actions || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
                               </div>
-                            )}
-                          </div>
-
-                          <div className="flex flex-col mt-1">
-                            <span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">รางม่าน</span>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              {item.tracks?.map(tStr => <span key={tStr} className="bg-gray-100 px-2 py-0.5 rounded border border-gray-300 text-[12px] flex items-center shadow-sm font-bold text-gray-800">{tStr} <X size={10} className="ml-1 cursor-pointer text-red-500 no-print" onClick={()=>handleMultiSelect(item.id, 'tracks', tStr)}/></span>)}
-                              <select className="w-full border-b border-gray-300 outline-none no-print mt-1 text-[11px] text-gray-500 font-medium bg-transparent h-7" onChange={(e) => {if(e.target.value) handleMultiSelect(item.id, 'tracks', e.target.value); e.target.value='';}}><option value="">+ เลือกชนิดรางม่าน</option>{(appDB.tracks || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
-                              <div className="flex w-full gap-1 mt-1 no-print">
-                                 <input type="text" id={`customTrack-${item.id}`} placeholder="หรือพิมพ์ระบุเอง..." className="flex-1 border border-gray-200 rounded px-2 py-1 outline-none text-[11px] bg-white shadow-sm focus:border-blue-400 h-7" onKeyDown={(e: any) => { if(e.key === 'Enter' && e.target.value.trim()) { handleMultiSelect(item.id, 'tracks', e.target.value.trim()); e.target.value=''; } }} />
-                                 <button onClick={() => { const inp = document.getElementById(`customTrack-${item.id}`) as HTMLInputElement; if(inp && inp.value.trim()) { handleMultiSelect(item.id, 'tracks', inp.value.trim()); inp.value=''; } }} className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2 py-1 rounded text-[11px] font-bold shadow-sm transition-colors h-7 w-7 flex items-center justify-center">+</button>
-                              </div>
+                              {item.layers !== 1 && (
+                                <div className="flex gap-1.5 items-center mt-1.5">
+                                  <span className="text-[10px] font-bold text-gray-500 w-10 shrink-0">ชั้นที่ 2:</span>
+                                  <select value={item.styleMain2 || ''} onChange={(e)=>handleItemChange(item.id, 'styleMain2', e.target.value)} className="w-[45%] border-b border-gray-400 outline-none bg-transparent text-blue-800 font-bold text-xs h-7"><option value="">-รูปแบบ-</option>{(appDB.styles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                                  <span className="text-gray-400 font-bold">/</span>
+                                  <select value={item.styleAction2 || ''} onChange={(e)=>handleItemChange(item.id, 'styleAction2', e.target.value)} className="w-[45%] border-b border-gray-400 outline-none bg-transparent text-blue-800 font-bold text-xs h-7"><option value="">-เปิดปิด-</option>{(appDB.actions || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                                </div>
+                              )}
                             </div>
-                          </div>
 
-                          <div className="grid grid-cols-2 gap-3 mt-1 text-xs">
-                             <div className="flex flex-col"><span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">ขาจับราง</span><select value={item.bracket} onChange={(e)=>handleItemChange(item.id, 'bracket', e.target.value)} className="border-b border-gray-300 outline-none print-hidden bg-transparent mt-0.5 h-7"><option value="">-ระบุ-</option>{(appDB.brackets || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select><div className="hidden print-block text-[13px] font-bold mt-1 whitespace-pre-wrap text-gray-800">{item.bracket || '-'}</div></div>
-                             <div className="flex flex-col"><span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">การแขวน</span><select value={item.hangStyle} onChange={(e)=>handleItemChange(item.id, 'hangStyle', e.target.value)} className="border-b border-gray-300 outline-none print-hidden bg-transparent mt-0.5 h-7"><option value="">-ระบุ-</option>{(appDB.hangStyles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select><div className="hidden print-block text-[13px] font-bold mt-1 whitespace-pre-wrap text-gray-800">{item.hangStyle || '-'}</div></div>
-                          </div>
-
-                          <div className="flex flex-col mt-1">
-                            <span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">อุปกรณ์เสริม</span>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              {item.accessories?.map(tStr => <span key={tStr} className="bg-gray-100 px-2 py-0.5 rounded border border-gray-300 text-[12px] flex items-center shadow-sm font-bold text-gray-800">{tStr} <X size={10} className="ml-1 cursor-pointer text-red-500 no-print" onClick={()=>handleMultiSelect(item.id, 'accessories', tStr)}/></span>)}
-                              <select className="w-full border-b border-gray-300 outline-none no-print mt-1 text-[11px] text-gray-500 font-medium bg-transparent h-7" onChange={(e) => {if(e.target.value) handleMultiSelect(item.id, 'accessories', e.target.value); e.target.value='';}}><option value="">+ เลือกอุปกรณ์เสริม</option>{(appDB.accessories || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
-                              <div className="flex w-full gap-1 mt-1 no-print">
-                                 <input type="text" id={`customAcc-${item.id}`} placeholder="หรือพิมพ์ระบุเอง..." className="flex-1 border border-gray-200 rounded px-2 py-1 outline-none text-[11px] bg-white shadow-sm focus:border-blue-400 h-7" onKeyDown={(e: any) => { if(e.key === 'Enter' && e.target.value.trim()) { handleMultiSelect(item.id, 'accessories', e.target.value.trim()); e.target.value=''; } }} />
-                                 <button onClick={() => { const inp = document.getElementById(`customAcc-${item.id}`) as HTMLInputElement; if(inp && inp.value.trim()) { handleMultiSelect(item.id, 'accessories', inp.value.trim()); inp.value=''; } }} className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2 py-1 rounded text-[11px] font-bold shadow-sm transition-colors h-7 w-7 flex items-center justify-center">+</button>
+                            <div className="flex flex-col mt-1">
+                              <span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">รางม่าน</span>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {item.tracks?.map(tStr => <span key={tStr} className="bg-gray-100 px-2 py-0.5 rounded border border-gray-300 text-[12px] flex items-center shadow-sm font-bold text-gray-800">{tStr} <X size={10} className="ml-1 cursor-pointer text-red-500" onClick={()=>handleMultiSelect(item.id, 'tracks', tStr)}/></span>)}
+                                <select className="w-full border-b border-gray-300 outline-none mt-1 text-[11px] text-gray-500 font-medium bg-transparent h-7" onChange={(e) => {if(e.target.value) handleMultiSelect(item.id, 'tracks', e.target.value); e.target.value='';}}><option value="">+ เลือกชนิดรางม่าน</option>{(appDB.tracks || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                                <div className="flex w-full gap-1 mt-1">
+                                   <input type="text" id={`customTrack-${item.id}`} placeholder="หรือพิมพ์ระบุเอง..." className="flex-1 border border-gray-200 rounded px-2 py-1 outline-none text-[11px] bg-white shadow-sm focus:border-blue-400 h-7" onKeyDown={(e: any) => { if(e.key === 'Enter' && e.target.value.trim()) { handleMultiSelect(item.id, 'tracks', e.target.value.trim()); e.target.value=''; } }} />
+                                   <button onClick={() => { const inp = document.getElementById(`customTrack-${item.id}`) as HTMLInputElement; if(inp && inp.value.trim()) { handleMultiSelect(item.id, 'tracks', inp.value.trim()); inp.value=''; } }} className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2 py-1 rounded text-[11px] font-bold shadow-sm transition-colors h-7 w-7 flex items-center justify-center">+</button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
 
-                        <div className="border border-gray-300 p-2 rounded bg-gray-50">
-                          <span className="font-bold text-gray-800 block mb-1.5 border-b border-gray-300 pb-1 text-[14px]">ระยะการเผื่อม่าน</span>
-                          <div className="grid grid-cols-1 gap-y-2 text-[12px]">
-                            <div className="flex gap-3">
-                              <MarginSelector label="ด้านซ้าย" field="marginLeft" customField="customMarginLeft" item={item} options={appDB.margins?.horizontal || []} onChange={handleItemChange} />
-                              <MarginSelector label="ด้านขวา" field="marginRight" customField="customMarginRight" item={item} options={appDB.margins?.horizontal || []} onChange={handleItemChange} />
+                            <div className="grid grid-cols-2 gap-3 mt-1 text-xs">
+                               <div className="flex flex-col"><span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">ขาจับราง</span><select value={item.bracket} onChange={(e)=>handleItemChange(item.id, 'bracket', e.target.value)} className="border-b border-gray-300 outline-none bg-transparent mt-0.5 h-7"><option value="">-ระบุ-</option>{(appDB.brackets || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select></div>
+                               <div className="flex flex-col"><span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">การแขวน</span><select value={item.hangStyle} onChange={(e)=>handleItemChange(item.id, 'hangStyle', e.target.value)} className="border-b border-gray-300 outline-none bg-transparent mt-0.5 h-7"><option value="">-ระบุ-</option>{(appDB.hangStyles || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select></div>
                             </div>
-                            <div className="flex gap-3 items-start mt-1">
-                              <MarginSelector label="ด้านบน" field="marginTop" customField="customMarginTop" item={item} options={appDB.margins?.top || []} onChange={handleItemChange} />
-                              <MarginSelector label="ด้านล่าง" field="marginBottom" customField="customMarginBottom" item={item} options={appDB.margins?.bottom || []} onChange={handleItemChange} />
+
+                            <div className="flex flex-col mt-1">
+                              <span className="font-bold text-gray-800 text-[14px] border-b border-gray-300 pb-1 mb-1">อุปกรณ์เสริม</span>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {item.accessories?.map(tStr => <span key={tStr} className="bg-gray-100 px-2 py-0.5 rounded border border-gray-300 text-[12px] flex items-center shadow-sm font-bold text-gray-800">{tStr} <X size={10} className="ml-1 cursor-pointer text-red-500" onClick={()=>handleMultiSelect(item.id, 'accessories', tStr)}/></span>)}
+                                <select className="w-full border-b border-gray-300 outline-none mt-1 text-[11px] text-gray-500 font-medium bg-transparent h-7" onChange={(e) => {if(e.target.value) handleMultiSelect(item.id, 'accessories', e.target.value); e.target.value='';}}><option value="">+ เลือกอุปกรณ์เสริม</option>{(appDB.accessories || []).map((s: string)=><option key={s} value={s}>{s}</option>)}</select>
+                                <div className="flex w-full gap-1 mt-1">
+                                   <input type="text" id={`customAcc-${item.id}`} placeholder="หรือพิมพ์ระบุเอง..." className="flex-1 border border-gray-200 rounded px-2 py-1 outline-none text-[11px] bg-white shadow-sm focus:border-blue-400 h-7" onKeyDown={(e: any) => { if(e.key === 'Enter' && e.target.value.trim()) { handleMultiSelect(item.id, 'accessories', e.target.value.trim()); e.target.value=''; } }} />
+                                   <button onClick={() => { const inp = document.getElementById(`customAcc-${item.id}`) as HTMLInputElement; if(inp && inp.value.trim()) { handleMultiSelect(item.id, 'accessories', inp.value.trim()); inp.value=''; } }} className="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2 py-1 rounded text-[11px] font-bold shadow-sm transition-colors h-7 w-7 flex items-center justify-center">+</button>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex flex-col pt-2 border-t border-gray-300 shrink-0 mt-auto">
-                          <span className="font-bold text-red-600 print:text-gray-800 text-[14px] mb-1">หมายเหตุ</span>
-                          <textarea value={item.note || ''} onChange={(e)=>handleItemChange(item.id, 'note', e.target.value)} rows={2} className="w-full border border-red-200 rounded p-1.5 text-red-600 focus:outline-none focus:border-red-400 print-hidden resize-none bg-red-50 text-[12px] leading-tight" placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"></textarea>
-                          <div className="hidden print-block w-full text-[13px] leading-relaxed whitespace-pre-wrap font-bold text-red-600">{item.note || '-'}</div>
-                        </div>
+                          <div className="border border-gray-300 p-2 rounded bg-gray-50">
+                            <span className="font-bold text-gray-800 block mb-1.5 border-b border-gray-300 pb-1 text-[14px]">ระยะการเผื่อม่าน</span>
+                            <div className="grid grid-cols-1 gap-y-2 text-[12px]">
+                              <div className="flex gap-3">
+                                <MarginSelector label="ด้านซ้าย" field="marginLeft" customField="customMarginLeft" item={item} options={appDB.margins?.horizontal || []} onChange={handleItemChange} />
+                                <MarginSelector label="ด้านขวา" field="marginRight" customField="customMarginRight" item={item} options={appDB.margins?.horizontal || []} onChange={handleItemChange} />
+                              </div>
+                              <div className="flex gap-3 items-start mt-1">
+                                <MarginSelector label="ด้านบน" field="marginTop" customField="customMarginTop" item={item} options={appDB.margins?.top || []} onChange={handleItemChange} />
+                                <MarginSelector label="ด้านล่าง" field="marginBottom" customField="customMarginBottom" item={item} options={appDB.margins?.bottom || []} onChange={handleItemChange} />
+                              </div>
+                            </div>
+                          </div>
 
+                          <div className="flex flex-col pt-2 border-t border-gray-300 shrink-0 mt-auto">
+                            <span className="font-bold text-red-600 text-[14px] mb-1">หมายเหตุ</span>
+                            <textarea value={item.note || ''} onChange={(e)=>handleItemChange(item.id, 'note', e.target.value)} rows={2} className="w-full border border-red-200 rounded p-1.5 text-red-600 focus:outline-none focus:border-red-400 resize-none bg-red-50 text-[12px] leading-tight" placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"></textarea>
+                          </div>
+
+                        </div>
                       </div>
+
+                      {/* ========================================================================= */}
+                      {/* PRINT / PDF VIEW ONLY (Right Column Specification Card)                   */}
+                      {/* ========================================================================= */}
+                      <div className="hidden print-flex flex-col w-full h-full p-2 bg-white justify-between box-border overflow-hidden">
+                        {/* 1. รายละเอียดการติดตั้งผ้าม่าน (Header card) */}
+                        <div className="border border-[#bca390] rounded-lg overflow-hidden bg-white shadow-none w-full">
+                          {/* Header banner */}
+                          <div className="bg-[#85634d] text-white text-center font-bold py-1 px-2 text-[12px] tracking-wide">
+                            รายละเอียดการติดตั้งผ้าม่าน
+                          </div>
+                          
+                          {/* 2. จุดที่ติดตั้ง : */}
+                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
+                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                              จุดที่ติดตั้ง :
+                            </div>
+                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex items-center leading-tight whitespace-pre-wrap">
+                              {item.roomPos || '-'}
+                            </div>
+                          </div>
+
+                          {/* 3. รูปแบบผ้าม่าน : */}
+                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
+                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                              รูปแบบผ้าม่าน :
+                            </div>
+                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                              {curtainStyleLines.map((line: string, lIdx: number) => (
+                                <span key={lIdx} className="block">{line}</span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 4. ขนาด : */}
+                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
+                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                              ขนาด :
+                            </div>
+                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                              {areaSizesLines.map((line: string, aIdx: number) => (
+                                <span key={aIdx} className="block">{line}</span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 5. รูปแบบการติดตั้ง : */}
+                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
+                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                              รูปแบบการติดตั้ง :
+                            </div>
+                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex items-center leading-tight">
+                              {installationText}
+                            </div>
+                          </div>
+
+                          {/* 6. รางม่าน : */}
+                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
+                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                              รางม่าน :
+                            </div>
+                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                              {trackLines.map((line: string, tIdx: number) => (
+                                <span key={tIdx} className="block">{line}</span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 7. อุปกรณ์เสริม : */}
+                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
+                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                              อุปกรณ์เสริม :
+                            </div>
+                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                              {accessoryLines.map((line: string, acIdx: number) => (
+                                <span key={acIdx} className="block">{line}</span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 8. การเผื่อราง : */}
+                          <div className="flex min-h-[26px]">
+                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                              การเผื่อราง :
+                            </div>
+                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                              {marginLines.map((line: string, mIdx: number) => (
+                                <span key={mIdx} className="block">{line}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 9. หมายเหตุ : (Card 2) */}
+                        <div className="mt-2 border border-[#bca390] rounded-lg overflow-hidden bg-white w-full shrink-0">
+                          <div className="bg-[#85634d] text-white font-bold py-1 px-2.5 text-[11px] flex items-center">
+                            หมายเหตุ :
+                          </div>
+                          <div className="p-2 text-[10.5px] leading-relaxed text-black whitespace-pre-wrap font-medium min-h-[45px] bg-[#fdfbf9]">
+                            {item.note?.trim() || '-'}
+                          </div>
+                        </div>
+                      </div>
+
                     </div>
                   </div>
                 </div>
