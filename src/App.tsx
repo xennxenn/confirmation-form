@@ -891,13 +891,16 @@ const App: React.FC = () => {
               });
             })();
 
-            const installationText = (() => {
-              const b = item.bracket && item.bracket !== '-' ? item.bracket : '';
-              const h = item.hangStyle && item.hangStyle !== '-' ? item.hangStyle : '';
-              if (b && h) return `${b} / ${h}`;
-              if (b) return b;
-              if (h) return h;
-              return '-';
+            const installationLines = (() => {
+              const lines: string[] = [];
+              if (item.bracket && item.bracket !== '-') {
+                lines.push(`ขาจับราง : ${item.bracket}`);
+              }
+              if (item.hangStyle && item.hangStyle !== '-') {
+                lines.push(`การแขวน : ${item.hangStyle}`);
+              }
+              if (lines.length === 0) return ['-'];
+              return lines;
             })();
 
             const trackLines = (() => {
@@ -915,8 +918,8 @@ const App: React.FC = () => {
             const marginLines = (() => {
               const getVal = (field: string, customField: string) => {
                 const v = (item as any)[field];
-                if (!v || v === '-') return '-';
-                if (v === 'ระบุเอง...') return (item as any)[customField] || '-';
+                if (!v || v === '-') return '';
+                if (v === 'ระบุเอง...') return (item as any)[customField] || '';
                 return v;
               };
 
@@ -925,14 +928,14 @@ const App: React.FC = () => {
               const top = getVal('marginTop', 'customMarginTop');
               const bottom = getVal('marginBottom', 'customMarginBottom');
 
-              const hasHoriz = left !== '-' || right !== '-';
-              const hasVert = top !== '-' || bottom !== '-';
+              const lines: string[] = [];
+              if (left) lines.push(`ด้านซ้าย : ${left}`);
+              if (right) lines.push(`ด้านขวา : ${right}`);
+              if (top) lines.push(`ด้านบน : ${top}`);
+              if (bottom) lines.push(`ด้านล่าง : ${bottom}`);
 
-              if (!hasHoriz && !hasVert) return ['-'];
-
-              const line1 = `ซ้าย ${left}  +  ขวา ${right}`;
-              const line2 = `บน ${top}  /  ล่าง ${bottom}`;
-              return [line1, line2];
+              if (lines.length === 0) return ['-'];
+              return lines;
             })();
 
             return (
@@ -948,11 +951,11 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="border border-gray-300 print:border-2 print:border-gray-800 flex flex-col lg:flex-row print:flex-row h-auto lg:h-[750px] print:h-[185mm] mt-8 md:mt-0 bg-white relative overflow-hidden w-full box-border">
-                    {/* Left Column (70%) */}
-                    <div className="w-full lg:w-[70%] print:w-[70%] min-h-[400px] h-[50vh] sm:h-[60vh] lg:h-full print:h-full border-b lg:border-b-0 print:border-b-0 lg:border-r print:border-r-2 print:border-gray-800 border-gray-300 flex flex-col bg-white relative z-20">
+                    {/* Left Column (70%) - no divider border in print mode */}
+                    <div className="w-full lg:w-[70%] print:w-[70%] min-h-[400px] h-[50vh] sm:h-[60vh] lg:h-full print:h-full border-b lg:border-b-0 print:border-b-0 lg:border-r print:border-r-0 border-gray-300 flex flex-col bg-white relative z-20">
                       
-                      {/* Site photo area (รูปหน้างาน) */}
-                      <div className="flex-1 w-full border-b print:border-b-2 print:border-gray-800 border-gray-300 flex flex-col relative bg-gray-100 shrink-0 overflow-hidden">
+                      {/* Site photo area (รูปหน้างาน) - no divider border in print mode */}
+                      <div className="flex-1 w-full border-b print:border-b-0 border-gray-300 flex flex-col relative bg-gray-100 shrink-0 overflow-hidden">
                         <ImageAreaEditor item={item} appDB={appDB} handleItemChange={handleItemChange} setDialog={setDialog} idPrefix={`print-${index}`} generalInfo={generalInfo} itemIndex={index + 1} />
                       </div>
                       
@@ -1109,102 +1112,103 @@ const App: React.FC = () => {
                       {/* ========================================================================= */}
                       {/* PRINT / PDF VIEW ONLY (Right Column Specification Card)                   */}
                       {/* ========================================================================= */}
-                      <div className="hidden print-flex flex-col w-full h-full p-2 bg-white justify-between box-border overflow-hidden">
-                        {/* 1. รายละเอียดการติดตั้งผ้าม่าน (Header card) */}
-                        <div className="border border-[#bca390] rounded-lg overflow-hidden bg-white shadow-none w-full">
+                      <div className="hidden print-flex flex-col w-full h-full p-2 bg-white box-border overflow-hidden">
+                        <div className="border border-gray-400 rounded-lg overflow-hidden bg-white shadow-none w-full flex flex-col flex-1">
                           {/* Header banner */}
-                          <div className="bg-[#85634d] text-white text-center font-bold py-1 px-2 text-[12px] tracking-wide">
+                          <div className="bg-gray-700 text-white text-center font-bold py-1.5 px-2 text-[14px] tracking-wide shrink-0">
                             รายละเอียดการติดตั้งผ้าม่าน
                           </div>
                           
-                          {/* 2. จุดที่ติดตั้ง : */}
-                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
-                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                          {/* 1. จุดที่ติดตั้ง : */}
+                          <div className="border-b border-gray-300">
+                            <div className="bg-gray-100 px-2.5 py-0.5 text-gray-700 font-bold text-[12px]">
                               จุดที่ติดตั้ง :
                             </div>
-                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex items-center leading-tight whitespace-pre-wrap">
+                            <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug whitespace-pre-wrap">
                               {item.roomPos || '-'}
                             </div>
                           </div>
 
-                          {/* 3. รูปแบบผ้าม่าน : */}
-                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
-                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                          {/* 2. รูปแบบผ้าม่าน : */}
+                          <div className="border-b border-gray-300">
+                            <div className="bg-gray-100 px-2.5 py-0.5 text-gray-700 font-bold text-[12px]">
                               รูปแบบผ้าม่าน :
                             </div>
-                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                            <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
                               {curtainStyleLines.map((line: string, lIdx: number) => (
                                 <span key={lIdx} className="block">{line}</span>
                               ))}
                             </div>
                           </div>
 
-                          {/* 4. ขนาด : */}
-                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
-                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                          {/* 3. ขนาด : */}
+                          <div className="border-b border-gray-300">
+                            <div className="bg-gray-100 px-2.5 py-0.5 text-gray-700 font-bold text-[12px]">
                               ขนาด :
                             </div>
-                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                            <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
                               {areaSizesLines.map((line: string, aIdx: number) => (
                                 <span key={aIdx} className="block">{line}</span>
                               ))}
                             </div>
                           </div>
 
-                          {/* 5. รูปแบบการติดตั้ง : */}
-                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
-                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                          {/* 4. รูปแบบการติดตั้ง : (1 ข้อมูล 1 บรรทัด เช่น ขาจับราง, การแขวน) */}
+                          <div className="border-b border-gray-300">
+                            <div className="bg-gray-100 px-2.5 py-0.5 text-gray-700 font-bold text-[12px]">
                               รูปแบบการติดตั้ง :
                             </div>
-                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex items-center leading-tight">
-                              {installationText}
+                            <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
+                              {installationLines.map((line: string, iIdx: number) => (
+                                <span key={iIdx} className="block">{line}</span>
+                              ))}
                             </div>
                           </div>
 
-                          {/* 6. รางม่าน : */}
-                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
-                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                          {/* 5. รางม่าน : */}
+                          <div className="border-b border-gray-300">
+                            <div className="bg-gray-100 px-2.5 py-0.5 text-gray-700 font-bold text-[12px]">
                               รางม่าน :
                             </div>
-                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                            <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
                               {trackLines.map((line: string, tIdx: number) => (
                                 <span key={tIdx} className="block">{line}</span>
                               ))}
                             </div>
                           </div>
 
-                          {/* 7. อุปกรณ์เสริม : */}
-                          <div className="flex border-b border-[#ebdcd0] min-h-[26px]">
-                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                          {/* 6. อุปกรณ์เสริม : */}
+                          <div className="border-b border-gray-300">
+                            <div className="bg-gray-100 px-2.5 py-0.5 text-gray-700 font-bold text-[12px]">
                               อุปกรณ์เสริม :
                             </div>
-                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                            <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
                               {accessoryLines.map((line: string, acIdx: number) => (
                                 <span key={acIdx} className="block">{line}</span>
                               ))}
                             </div>
                           </div>
 
-                          {/* 8. การเผื่อราง : */}
-                          <div className="flex min-h-[26px]">
-                            <div className="w-[36%] bg-[#f8f3ee] px-2 py-1 text-[#544033] font-bold text-[10.5px] flex items-center shrink-0 border-r border-[#ebdcd0]">
+                          {/* 7. การเผื่อราง : (1 ข้อมูล 1 บรรทัด ด้านซ้าย ด้านขวา ด้านบน ด้านล่าง) */}
+                          <div>
+                            <div className="bg-gray-100 px-2.5 py-0.5 text-gray-700 font-bold text-[12px]">
                               การเผื่อราง :
                             </div>
-                            <div className="w-[64%] bg-white px-2 py-1 text-black font-semibold text-[10.5px] flex flex-col justify-center leading-tight gap-0.5">
+                            <div className="bg-white px-2.5 py-1 text-black font-semibold text-[13px] leading-snug flex flex-col gap-0.5">
                               {marginLines.map((line: string, mIdx: number) => (
                                 <span key={mIdx} className="block">{line}</span>
                               ))}
                             </div>
                           </div>
-                        </div>
 
-                        {/* 9. หมายเหตุ : (Card 2) */}
-                        <div className="mt-2 border border-[#bca390] rounded-lg overflow-hidden bg-white w-full shrink-0">
-                          <div className="bg-[#85634d] text-white font-bold py-1 px-2.5 text-[11px] flex items-center">
-                            หมายเหตุ :
-                          </div>
-                          <div className="p-2 text-[10.5px] leading-relaxed text-black whitespace-pre-wrap font-medium min-h-[45px] bg-[#fdfbf9]">
-                            {item.note?.trim() || '-'}
+                          {/* 8. หมายเหตุ : (ชิดกับข้อมูลรายละเอียดการติดตั้งผ้าม่านเลย โดยปรับขนาดยืดหดข้อมูลหมายเหตุให้พอดีกับหน้าข้อมูล) */}
+                          <div className="border-t border-gray-400 flex flex-col flex-1 min-h-[50px] bg-white">
+                            <div className="bg-gray-700 text-white font-bold py-1 px-2.5 text-[13px] flex items-center shrink-0">
+                              หมายเหตุ :
+                            </div>
+                            <div className="p-2 text-[13px] leading-relaxed text-black whitespace-pre-wrap font-semibold flex-1 overflow-hidden bg-white">
+                              {item.note?.trim() || '-'}
+                            </div>
                           </div>
                         </div>
                       </div>
