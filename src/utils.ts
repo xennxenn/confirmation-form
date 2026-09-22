@@ -1,8 +1,51 @@
 export const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dsxpwfujb/image/upload";
 export const CLOUDINARY_UPLOAD_PRESET = "ml_default"; 
 
+// Memory cache for fetched images as base64/blob DataURLs to speed up loading and guarantee html2canvas captures
+const dataUrlCache = new Map<string, string>();
+const pendingFetches = new Map<string, Promise<string>>();
+
+export const getCachedDataUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  return dataUrlCache.get(url) || null;
+};
+
+export const preloadImageDataUrl = async (url: string | null | undefined): Promise<string> => {
+  if (!url) return '';
+  if (url.startsWith('data:')) return url;
+  if (dataUrlCache.has(url)) return dataUrlCache.get(url)!;
+  if (pendingFetches.has(url)) return pendingFetches.get(url)!;
+
+  const fetchPromise = (async () => {
+    try {
+      const response = await fetch(url, { credentials: 'omit', mode: 'cors' });
+      const blob = await response.blob();
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          dataUrlCache.set(url, result);
+          resolve(result);
+        };
+        reader.onerror = () => resolve(url);
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      // If CORS or network fails, fallback to original URL
+      return url;
+    } finally {
+      pendingFetches.delete(url);
+    }
+  })();
+
+  pendingFetches.set(url, fetchPromise);
+  return fetchPromise;
+};
+
 export const optImg = (url: string | null | undefined, width?: number, forcePng?: boolean): string => {
-  if (!url || typeof url !== 'string' || !url.includes('cloudinary.com/')) return url || '';
+  if (!url || typeof url !== 'string') return '';
+  if (url.startsWith('data:')) return url;
+  if (!url.includes('cloudinary.com/')) return url;
   
   // Clean up any existing auto-transformations to ensure we apply the correct format (png vs jpg)
   let cleanUrl = url;
@@ -16,7 +59,9 @@ export const optImg = (url: string | null | undefined, width?: number, forcePng?
     }
   }
 
-  const format = forcePng ? 'f_png' : 'f_jpg';
+  // Use f_png for transparent masks/icons, f_auto for optimal speed & size on sample images
+  const format = forcePng ? 'f_png' : 'f_auto';
+  // Use responsive quality q_auto:good to boost load speed dramatically
   return cleanUrl.replace('/upload/', `/upload/${format},q_auto${width ? `,w_${width}` : ''}/`);
 };
 

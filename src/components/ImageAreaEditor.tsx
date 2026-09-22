@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Settings, Plus, Trash2, Upload, Move, X, MousePointerClick, Minimize2, Maximize2 } from 'lucide-react';
-import { optImg, processImageFile, uploadImageToCloudinary } from '../utils';
+import { optImg, processImageFile, uploadImageToCloudinary, preloadImageDataUrl, getCachedDataUrl } from '../utils';
 import { PRESET_COLORS, ACCEPTED_IMAGE_FORMATS } from '../types';
 
 interface ImageAreaEditorProps {
@@ -135,6 +135,44 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
       }
     }
   }, [item.image]);
+
+  // Preload and cache mask and fabric pattern images for this item so rendering is instantaneous and PDF generation includes them reliably
+  useEffect(() => {
+    const urlsToPreload: string[] = [];
+    if (appDB?.masks) {
+      (item.areas || []).forEach((area: any) => {
+        const style = area.styleMain1 || item.styleMain1 || '';
+        const action = area.styleAction1 || item.styleAction1 || item.styleAction || '';
+        const matchedKey = Object.keys(appDB.masks || {}).find(
+          k => k.trim() === style.trim() || (style && (style.includes(k) || k.includes(style)))
+        );
+        const masksObj = matchedKey ? (appDB.masks[matchedKey] || {}) : (appDB.masks?.[style] || {});
+        const targetMask = masksObj[action] || masksObj['ALL'] || Object.values(masksObj)[0];
+        if (targetMask && typeof targetMask === 'string') {
+          urlsToPreload.push(optImg(targetMask, 1200, true));
+        }
+        if (masksObj['รวบซ้าย']) urlsToPreload.push(optImg(masksObj['รวบซ้าย'], 1200, true));
+        if (masksObj['รวบขวา']) urlsToPreload.push(optImg(masksObj['รวบขวา'], 1200, true));
+      });
+    }
+
+    // Also preload fabric textures for this item
+    (item.areas || []).forEach((area: any) => {
+      (area.fabrics || []).forEach((fab: any) => {
+        let fImg = fab.image;
+        if (!fImg && fab.mainType === 'ผ้านอกระบบ (เฉพาะงานนี้)' && generalInfo) {
+          fImg = (generalInfo.customFabrics || []).find((f: any) => f.subType === fab.subType && f.name === fab.name && f.color === fab.color)?.image;
+        } else if (!fImg && appDB?.curtainTypes) {
+          fImg = appDB.curtainTypes[fab.mainType]?.[fab.subType]?.[fab.name]?.[fab.color];
+        }
+        if (fImg) {
+          urlsToPreload.push(optImg(fImg, 300));
+        }
+      });
+    });
+
+    urlsToPreload.forEach(u => preloadImageDataUrl(u));
+  }, [item.areas, item.styleMain1, item.styleAction1, item.styleAction, appDB, generalInfo]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -409,6 +447,7 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
                     alt="Window view" 
                     style={{ width: '100%', height: '100%', display: 'block', objectFit: 'fill' }}
                     className="absolute inset-0 pointer-events-none" 
+                    crossOrigin="anonymous"
                     onLoad={e => {
                       const img = e.target as HTMLImageElement;
                       setImgNativeSize({ w: img.naturalWidth, h: img.naturalHeight });
@@ -521,17 +560,23 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
                                 fImg = appDB.curtainTypes[fab.mainType]?.[fab.subType]?.[fab.name]?.[fab.color];
                               }
                               if (!fImg) return null;
+                              const fOpt = optImg(fImg, 300);
+                              const fSrc = getCachedDataUrl(fOpt) || fOpt;
                               return (
                                 <pattern key={fPatId} id={fPatId} patternUnits="userSpaceOnUse" width={patSize} height={patSize}>
-                                  <image href={optImg(fImg, 300)} x="-0.5" y="-0.5" width={patSize + 1} height={patSize + 1} preserveAspectRatio="none" />
+                                  <image href={fSrc} xlinkHref={fSrc} crossOrigin="anonymous" x="-0.5" y="-0.5" width={patSize + 1} height={patSize + 1} preserveAspectRatio="none" />
                                 </pattern>
                               );
                             })}
-                            {fabricImg && (
-                              <pattern id={patId} patternUnits="userSpaceOnUse" width={patSize} height={patSize}>
-                                <image href={optImg(fabricImg, 300)} x="-0.5" y="-0.5" width={patSize + 1} height={patSize + 1} preserveAspectRatio="none" />
-                              </pattern>
-                            )}
+                            {fabricImg && (() => {
+                              const fabOpt = optImg(fabricImg, 300);
+                              const fabSrc = getCachedDataUrl(fabOpt) || fabOpt;
+                              return (
+                                <pattern id={patId} patternUnits="userSpaceOnUse" width={patSize} height={patSize}>
+                                  <image href={fabSrc} xlinkHref={fabSrc} crossOrigin="anonymous" x="-0.5" y="-0.5" width={patSize + 1} height={patSize + 1} preserveAspectRatio="none" />
+                                </pattern>
+                              );
+                            })()}
                             {isBlindsHoriz && (
                               <pattern 
                                 id={horizPatId} 
@@ -1085,10 +1130,14 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
                       if (maskImgFallback) {
                         // Display mask directly from database without adding extra color (ตามฐานข้อมูล ไม่ต้องใส่สีเพิ่มเติม ทุกมาสก์)
                         if (maskType === 'height') {
+                          const optimizedUrl = optImg(maskImgFallback, 1200, true);
+                          const finalMaskSrc = getCachedDataUrl(optimizedUrl) || optimizedUrl;
                           maskElements.push(
                             <g key="H" clipPath={`url(#${clipId})`}>
                               <image
-                                href={optImg(maskImgFallback, 1200, true)}
+                                href={finalMaskSrc}
+                                xlinkHref={finalMaskSrc}
+                                crossOrigin="anonymous"
                                 x={minX_px}
                                 y={minY_px}
                                 width={w_px}
@@ -1099,14 +1148,20 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
                             </g>
                           );
                         } else {
-                          const leftImg = masks['รวบซ้าย'] || masks[action] || masks['ALL'] || maskImgFallback;
-                          const rightImg = masks['รวบขวา'] || masks[action] || masks['ALL'] || maskImgFallback;
+                          const leftImgRaw = masks['รวบซ้าย'] || masks[action] || masks['ALL'] || maskImgFallback;
+                          const rightImgRaw = masks['รวบขวา'] || masks[action] || masks['ALL'] || maskImgFallback;
+                          const optLeft = optImg(leftImgRaw, 1200, true);
+                          const optRight = optImg(rightImgRaw, 1200, true);
+                          const leftImg = getCachedDataUrl(optLeft) || optLeft;
+                          const rightImg = getCachedDataUrl(optRight) || optRight;
 
                           if (action.includes('แยกกลาง')) {
                             maskElements.push(
                               <g key="W" clipPath={`url(#${clipId})`}>
                                 <image
-                                  href={optImg(leftImg, 1200, true)}
+                                  href={leftImg}
+                                  xlinkHref={leftImg}
+                                  crossOrigin="anonymous"
                                   x={minX_px}
                                   y={minY_px}
                                   width={w_px * mPct}
@@ -1115,7 +1170,9 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
                                   opacity={maskOpacity}
                                 />
                                 <image
-                                  href={optImg(rightImg, 1200, true)}
+                                  href={rightImg}
+                                  xlinkHref={rightImg}
+                                  crossOrigin="anonymous"
                                   x={maxX_px - (w_px * mPct)}
                                   y={minY_px}
                                   width={w_px * mPct}
@@ -1129,7 +1186,9 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
                             maskElements.push(
                               <g key="R" clipPath={`url(#${clipId})`}>
                                 <image
-                                  href={optImg(rightImg, 1200, true)}
+                                  href={rightImg}
+                                  xlinkHref={rightImg}
+                                  crossOrigin="anonymous"
                                   x={maxX_px - (w_px * mPct)}
                                   y={minY_px}
                                   width={w_px * mPct}
@@ -1143,7 +1202,9 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
                             maskElements.push(
                               <g key="L" clipPath={`url(#${clipId})`}>
                                 <image
-                                  href={optImg(leftImg, 1200, true)}
+                                  href={leftImg}
+                                  xlinkHref={leftImg}
+                                  crossOrigin="anonymous"
                                   x={minX_px}
                                   y={minY_px}
                                   width={w_px * mPct}

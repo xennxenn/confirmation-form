@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Database, X, ChevronLeft, ChevronRight, Trash2, Upload, Download } from 'lucide-react';
-import { processImageFile, uploadImageToCloudinary } from '../utils';
+import { processImageFile, uploadImageToCloudinary, optImg } from '../utils';
 import { ACCEPTED_IMAGE_FORMATS } from '../types';
 
 interface DatabaseModalProps {
@@ -22,7 +22,6 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   setDialog, 
   setBgUploadQueue 
 }) => {
-  if (!showDBSettings) return null;
   const [activeTab, setActiveTab] = useState('fabrics');
   const [cat, setCat] = useState('ผ้าม่าน');
   const [type, setType] = useState('');
@@ -258,6 +257,8 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
     }
   }
 
+  if (!showDBSettings) return null;
+
   return (
     <div className="fixed inset-0 bg-black/60 z-[100000] flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -323,7 +324,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                       {fabricList.map(({ itemName, itemColor, imgUrl }) => (
                         <div key={`${itemName}-${itemColor}`} className="bg-white border p-2 rounded flex gap-2 relative group shadow-sm">
                           <button onClick={()=>deleteFabricItem(type, itemName, itemColor)} className="absolute top-1 right-1 bg-red-100 text-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12}/></button>
-                          <img src={imgUrl} alt="" className="w-12 h-12 object-cover rounded border" referrerPolicy="no-referrer" />
+                          <img src={optImg(imgUrl, 120)} alt="" className="w-12 h-12 object-cover rounded border" loading="lazy" referrerPolicy="no-referrer" />
                           <div className="flex flex-col justify-center flex-1 overflow-hidden">
                             <span className="text-xs font-bold truncate">{itemName}</span>
                             <span className="text-[10px] text-gray-500 truncate">{itemColor}</span>
@@ -447,7 +448,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                               <span className="text-gray-500">{ac === 'ALL' ? 'ทุกการเปิดปิด' : ac}</span>
                             </div>
                             <div className="w-16 h-16 bg-gray-100 border rounded mr-3 flex items-center justify-center overflow-hidden shrink-0">
-                              <img src={img} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                              <img src={optImg(img, 200)} className="w-full h-full object-contain" loading="lazy" referrerPolicy="no-referrer" />
                             </div>
                             <button onClick={()=>{
                               const newDB = JSON.parse(JSON.stringify(appDB));

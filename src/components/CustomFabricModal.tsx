@@ -11,7 +11,6 @@ interface CustomFabricModalProps {
 }
 
 export const CustomFabricModal: React.FC<CustomFabricModalProps> = ({ show, onClose, onAdd, setDialog }) => {
-  if (!show) return null;
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,6 +45,8 @@ export const CustomFabricModal: React.FC<CustomFabricModalProps> = ({ show, onCl
     }
     setLoading(false);
   };
+
+  if (!show) return null;
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[1000000] flex items-center justify-center p-4">

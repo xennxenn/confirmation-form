@@ -54,6 +54,7 @@ export interface CurtainItem {
   marginBottom: string;
   customMarginBottom: string;
   note: string;
+  hiddenInExport?: boolean;
 }
 
 export interface GeneralInfo {

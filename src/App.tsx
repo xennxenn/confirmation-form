@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, Printer, Upload, Download, Save, X, Settings, Database, Move, Users, LogOut, FileText, ArrowLeft, Share2, ChevronLeft, ChevronRight, Copy, ChevronUp, ChevronDown, Undo, Redo } from 'lucide-react';
+import { Plus, Trash2, Printer, Upload, Download, Save, X, Settings, Database, Move, Users, LogOut, FileText, ArrowLeft, Share2, ChevronLeft, ChevronRight, Copy, ChevronUp, ChevronDown, Undo, Redo, Eye, EyeOff } from 'lucide-react';
 import { onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import { doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot } from 'firebase/firestore';
 
 import { auth, db, appId } from './firebase';
 import { DEFAULT_DB, DEFAULT_ACCOUNTS, PRESET_COLORS, ACCEPTED_IMAGE_FORMATS, CurtainItem, AreaItem, GeneralInfo, Account } from './types';
-import { optImg, processImageFile, uploadImageToCloudinary } from './utils';
+import { optImg, processImageFile, uploadImageToCloudinary, preloadImageDataUrl } from './utils';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas-pro';
 
 import { AlertDialog, DialogState } from './components/AlertDialog';
 import { AutoFitText } from './components/AutoFitText';
@@ -44,6 +46,7 @@ const App: React.FC = () => {
 
   const [bgUploadQueue, setBgUploadQueue] = useState<any[]>([]);
   const [bgUploadProgress, setBgUploadProgress] = useState({ current: 0, total: 0, active: false });
+  const [pdfExportProgress, setPdfExportProgress] = useState<{ current: number; total: number; percent?: number; message?: string; active: boolean } | null>(null);
   const processingRef = useRef(false);
   const appDBRef = useRef(appDB);
 
@@ -384,6 +387,189 @@ const App: React.FC = () => {
     setShowIOSPrintModal(false);
   };
 
+  const downloadPDFDirectly = async () => {
+    if (pdfExportProgress?.active) return;
+    
+    // Set initial progress immediately so user has instant feedback
+    setPdfExportProgress({ current: 0, total: 1, percent: 1, message: 'กำลังบันทึกข้อมูลและเตรียมสร้าง PDF...', active: true });
+
+    await saveData();
+
+    let prevScrollX = window.scrollX;
+    let prevScrollY = window.scrollY;
+
+    try {
+      // Filter out hidden items so they are not included in PDF download
+      const allPages = Array.from(document.querySelectorAll('.print-center-page'));
+      const pageElements = allPages.filter(el => el.getAttribute('data-hidden-export') !== 'true');
+
+      if (!pageElements || pageElements.length === 0) {
+        setPdfExportProgress(null);
+        setDialog({ type: 'alert', message: 'ไม่พบหน้ารายการสำหรับสร้างไฟล์ PDF (รายการทั้งหมดอาจถูกตั้งค่าซ่อนไว้)' });
+        return;
+      }
+
+      const totalPages = pageElements.length;
+      setPdfExportProgress({ current: 0, total: totalPages, percent: 5, message: 'กำลังตรวจสอบและเตรียมมาสก์รูปภาพ...', active: true });
+
+      // Step 1: Preload all masks and item images across items to guarantee they render in PDF
+      const urlsToPreload = new Set<string>();
+      items.filter(it => !it.hiddenInExport).forEach(it => {
+        if (it.image) urlsToPreload.add(it.image);
+        (it.areas || []).forEach(ar => {
+          const style = ar.styleMain1 || it.styleMain1 || '';
+          const action = ar.styleAction1 || it.styleAction1 || it.styleAction || '';
+          const matchedKey = Object.keys(appDB?.masks || {}).find(
+            k => k.trim() === style.trim() || (style && (style.includes(k) || k.includes(style)))
+          );
+          const masksObj = matchedKey ? (appDB?.masks?.[matchedKey] || {}) : (appDB?.masks?.[style] || {});
+          const mImg = masksObj[action] || masksObj['ALL'] || Object.values(masksObj)[0];
+          if (mImg && typeof mImg === 'string') urlsToPreload.add(optImg(mImg, 1200, true));
+          if (masksObj['รวบซ้าย']) urlsToPreload.add(optImg(masksObj['รวบซ้าย'], 1200, true));
+          if (masksObj['รวบขวา']) urlsToPreload.add(optImg(masksObj['รวบขวา'], 1200, true));
+        });
+      });
+
+      if (urlsToPreload.size > 0) {
+        let loadedCount = 0;
+        const totalUrls = urlsToPreload.size;
+        await Promise.all(
+          Array.from(urlsToPreload).map(async (u) => {
+            try {
+              await preloadImageDataUrl(u);
+            } catch (e) {
+              // ignore single load error
+            }
+            loadedCount++;
+            const pct = Math.round(5 + (loadedCount / totalUrls) * 10);
+            setPdfExportProgress(prev => prev ? ({ ...prev, percent: pct, message: `กำลังโหลดมาสก์ (${loadedCount}/${totalUrls})...` }) : null);
+          })
+        );
+      }
+
+      setPdfExportProgress({ current: 0, total: totalPages, percent: 16, message: 'กำลังจัดเค้าโครงเอกสาร PDF แนวนอน A4...', active: true });
+
+      prevScrollX = window.scrollX;
+      prevScrollY = window.scrollY;
+      window.scrollTo(0, 0);
+
+      document.body.classList.add('pdf-exporting');
+
+      // Allow CSS reflow to complete
+      await new Promise(resolve => setTimeout(resolve, 350));
+
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+        compress: true,
+      });
+
+      for (let i = 0; i < pageElements.length; i++) {
+        const startPagePct = Math.round(18 + (i / totalPages) * 67);
+        setPdfExportProgress({ 
+          current: i + 1, 
+          total: totalPages, 
+          percent: startPagePct, 
+          message: `กำลังแปลงหน้ารายการที่ ${i + 1} จาก ${totalPages} หน้า...`, 
+          active: true 
+        });
+        const el = pageElements[i] as HTMLElement;
+
+        const canvas = await html2canvas(el, {
+          scale: 1.8,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: '#ffffff',
+          logging: false,
+          windowWidth: 1200,
+          scrollX: 0,
+          scrollY: 0,
+        });
+
+        // 0.82 JPEG quality keeps file size lightweight while maintaining crisp sharpness
+        const imgData = canvas.toDataURL('image/jpeg', 0.82);
+
+        if (i > 0) {
+          pdf.addPage([297, 210], 'landscape');
+        }
+
+        // Exact landscape A4: 297mm x 210mm
+        pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210, undefined, 'FAST');
+
+        const endPagePct = Math.round(18 + ((i + 1) / totalPages) * 67);
+        setPdfExportProgress({ 
+          current: i + 1, 
+          total: totalPages, 
+          percent: endPagePct, 
+          message: `แปลงหน้ารายการที่ ${i + 1} เสร็จเรียบร้อย...`, 
+          active: true 
+        });
+      }
+
+      // Step 3: Compressing & assembling the PDF binary
+      setPdfExportProgress({ 
+        current: totalPages, 
+        total: totalPages, 
+        percent: 88, 
+        message: 'กำลังบีบอัดและรวมโครงสร้างเอกสาร PDF...', 
+        active: true 
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Output PDF blob and trigger browser download
+      const rawCust = (generalInfo.customerName || 'ลูกค้า').trim();
+      const safeCust = rawCust.replace(/[\/\\:*?"<>|]/g, '_');
+      const fileName = `ใบสรุปงานติดตั้งผ้าม่าน_คุณ_${safeCust}.pdf`;
+
+      setPdfExportProgress({ 
+        current: totalPages, 
+        total: totalPages, 
+        percent: 95, 
+        message: 'กำลังส่งไฟล์ PDF ไปยังตัวจัดการดาวน์โหลดของเครื่อง...', 
+        active: true 
+      });
+
+      // Generate blob directly to prevent UI freeze
+      const pdfBlob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      downloadLink.download = fileName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+
+      // Final 100% confirmation state kept visible so user knows download finished
+      setPdfExportProgress({ 
+        current: totalPages, 
+        total: totalPages, 
+        percent: 100, 
+        message: '✅ ดาวน์โหลดไฟล์ PDF สำเร็จเรียบร้อย!', 
+        active: true 
+      });
+
+      document.body.classList.remove('pdf-exporting');
+      window.scrollTo(prevScrollX, prevScrollY);
+
+      // Keep progress dialog visible for 1.5 seconds at 100% so user sees completion clearly
+      setTimeout(() => {
+        setPdfExportProgress(null);
+      }, 1500);
+    } catch (err: any) {
+      console.error('PDF Generation Error:', err);
+      document.body.classList.remove('pdf-exporting');
+      window.scrollTo(prevScrollX, prevScrollY);
+      setPdfExportProgress(null);
+      setDialog({
+        type: 'alert',
+        message: 'เกิดข้อผิดพลาดในการดาวน์โหลด PDF: ' + (err?.message || 'โปรดลองใหม่อีกครั้ง')
+      });
+    }
+  };
+
   const handleGeneralChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setGeneralInfo(prev => ({ ...prev, [e.target.name]: e.target.value }));
   
   const handleCreatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -405,6 +591,10 @@ const App: React.FC = () => {
   const removeInstallDate = useCallback((date: string) => { setGeneralInfo(prev => ({ ...prev, installDates: prev.installDates.filter(d => d !== date) })); }, []);
 
   const removeItem = useCallback((id: string) => setItems(prev => prev.filter(item => item.id !== id)), []);
+
+  const toggleHideItem = useCallback((id: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, hiddenInExport: !item.hiddenInExport } : item));
+  }, []);
   
   const duplicateItem = useCallback((index: number) => {
     setItems(prev => {
@@ -566,10 +756,12 @@ const App: React.FC = () => {
           @page { size: landscape A4; margin: 10mm; }
           body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; display: block; }
           .no-print { display: none !important; }
+          .pdf-progress-modal { display: none !important; }
           .print-hidden { display: none !important; }
           .print-block { display: block !important; }
           .print-flex { display: flex !important; }
           .avoid-break { page-break-inside: avoid !important; }
+          .print-center-page[data-hidden-export="true"] { display: none !important; }
           .print-center-page { height: 100vh; width: 100%; display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; page-break-after: always !important; page-break-inside: avoid !important; box-sizing: border-box; }
           .print-content-wrapper { width: 100% !important; max-width: 277mm !important; }
           .whitespace-pre-wrap { white-space: pre-wrap !important; word-break: break-word !important; }
@@ -628,9 +820,146 @@ const App: React.FC = () => {
             height: 100% !important;
           }
         }
+
+        /* Direct PDF Download Capture Styles (exact matching minimal margins as print preview) */
+        body.pdf-exporting {
+          overflow-x: hidden !important;
+        }
+        body.pdf-exporting .no-print {
+          display: none !important;
+        }
+        body.pdf-exporting .pdf-progress-modal {
+          display: flex !important;
+        }
+        body.pdf-exporting .print-hidden {
+          display: none !important;
+        }
+        body.pdf-exporting .print-block {
+          display: block !important;
+        }
+        body.pdf-exporting .print-flex {
+          display: flex !important;
+        }
+        body.pdf-exporting select {
+          display: none !important;
+        }
+        body.pdf-exporting .avoid-break {
+          page-break-inside: avoid !important;
+        }
+        body.pdf-exporting .print-center-page[data-hidden-export="true"] {
+          display: none !important;
+        }
+        body.pdf-exporting #print-root-container {
+          width: 1122.5px !important;
+          max-width: 1122.5px !important;
+          min-width: 1122.5px !important;
+          padding: 0 !important;
+          margin: 0 auto !important;
+          box-shadow: none !important;
+          background: white !important;
+        }
+        body.pdf-exporting .print-center-page {
+          width: 1122.5px !important;
+          height: 793.7px !important;
+          min-width: 1122.5px !important;
+          max-width: 1122.5px !important;
+          min-height: 793.7px !important;
+          max-height: 793.7px !important;
+          padding: 37.8px !important;
+          margin: 0 !important;
+          background: #ffffff !important;
+          box-sizing: border-box !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: center !important;
+          align-items: center !important;
+          overflow: hidden !important;
+        }
+        body.pdf-exporting .print-content-wrapper {
+          width: 1046.9px !important;
+          max-width: 1046.9px !important;
+          box-sizing: border-box !important;
+        }
+        body.pdf-exporting .pdf-item-container {
+          display: flex !important;
+          flex-direction: row !important;
+          height: 699.2px !important;
+          max-height: 699.2px !important;
+          border: 0 !important;
+          margin-top: 0 !important;
+        }
+        body.pdf-exporting .pdf-item-left {
+          width: 70% !important;
+          height: 100% !important;
+          border-right: 0 !important;
+          border-bottom: 0 !important;
+        }
+        body.pdf-exporting .pdf-item-right {
+          width: 30% !important;
+          height: 699.2px !important;
+          overflow: hidden !important;
+          justify-content: flex-start !important;
+        }
+        body.pdf-exporting .pdf-sample-row {
+          height: 30% !important;
+        }
+        body.pdf-exporting .pdf-sample-grid {
+          gap: 16px !important;
+        }
+        body.pdf-exporting .print-fit-container-fit {
+          width: auto !important;
+          height: auto !important;
+          max-width: 100% !important;
+          max-height: 100% !important;
+          aspect-ratio: var(--aspect-ratio) !important;
+          position: relative !important;
+          display: block !important;
+          align-self: center !important;
+          flex-grow: 0 !important;
+          flex-shrink: 1 !important;
+        }
+        body.pdf-exporting .print-fit-container-fill {
+          width: auto !important;
+          height: auto !important;
+          min-width: 100% !important;
+          min-height: 100% !important;
+          max-width: none !important;
+          max-height: none !important;
+          aspect-ratio: var(--aspect-ratio) !important;
+          position: relative !important;
+          display: block !important;
+          align-self: center !important;
+          flex-grow: 0 !important;
+          flex-shrink: 0 !important;
+        }
+        body.pdf-exporting .print-fit-container-fit img {
+          position: relative !important;
+          inset: auto !important;
+          width: auto !important;
+          height: auto !important;
+          max-width: 100% !important;
+          max-height: 100% !important;
+          object-fit: contain !important;
+          display: block !important;
+        }
+        body.pdf-exporting .print-fit-container-fill img {
+          position: absolute !important;
+          inset: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: fill !important;
+          display: block !important;
+        }
+        body.pdf-exporting .print-fit-container-fit svg,
+        body.pdf-exporting .print-fit-container-fill svg {
+          position: absolute !important;
+          inset: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+        }
       `}</style>
 
-      <div className="max-w-[1200px] mx-auto bg-white shadow-lg p-4 md:p-8 rounded-sm relative z-0 print:shadow-none print:p-0 print:bg-transparent w-full print:max-w-none">
+      <div id="print-root-container" className="max-w-[1200px] mx-auto bg-white shadow-lg p-4 md:p-8 rounded-sm relative z-0 print:shadow-none print:p-0 print:bg-transparent w-full print:max-w-none">
         <div className="print-center-page w-full">
           <div className="print-content-wrapper w-full">
             <div className="mb-6 border-b-2 border-gray-800 pb-3 flex justify-between items-center avoid-break relative">
@@ -646,7 +975,7 @@ const App: React.FC = () => {
                 <ArrowLeft size={24}/>
               </button>
               <div className="w-1/3 text-left flex items-center gap-4">
-                <img src={logoSrc} alt="Logo" className="h-10 md:h-14 lg:h-16 object-contain" style={logoSrc.startsWith('data:') ? {} : { mixBlendMode: 'multiply', filter: 'contrast(1.1) brightness(1.1)' }} referrerPolicy="no-referrer" />
+                <img src={logoSrc} alt="Logo" className="h-10 md:h-14 lg:h-16 object-contain" style={logoSrc.startsWith('data:') ? {} : { mixBlendMode: 'multiply', filter: 'contrast(1.1) brightness(1.1)' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
                 <div className="no-print">
                   {appUser.role === 'admin' && <button onClick={()=>setShowDBSettings(true)} className="bg-gray-700 text-white px-3 py-2 rounded flex items-center hover:bg-gray-800 text-xs shadow font-bold transition-all w-fit h-9"><Settings size={16} className="mr-1.5"/> <span className="hidden md:inline">ฐานข้อมูล</span></button>}
                 </div>
@@ -692,7 +1021,7 @@ const App: React.FC = () => {
                   <div className="flex flex-col"><span className="font-bold text-gray-700">สถานที่ติดตั้ง :</span><textarea name="location" value={generalInfo.location} onChange={handleGeneralChange} rows={2} className="w-full border border-gray-300 rounded p-2 mt-1 outline-none focus:border-blue-500 print-hidden resize-none bg-white text-xs font-medium"></textarea><div className="hidden print-block w-full mt-1 text-[15px] font-bold whitespace-pre-wrap text-black border-b border-gray-300 pb-1">{generalInfo.location || '-'}</div></div>
                 </div>
                 <div className="mt-8 flex flex-col items-center justify-end relative h-24">
-                  {generalInfo.creatorSignature && <div className="h-12 w-full flex justify-center items-end mb-1"><img src={optImg(generalInfo.creatorSignature, 300)} className="max-h-full object-contain mix-blend-multiply" alt="signature" referrerPolicy="no-referrer" /></div>}
+                  {generalInfo.creatorSignature && <div className="h-12 w-full flex justify-center items-end mb-1"><img src={optImg(generalInfo.creatorSignature, 300)} className="max-h-full object-contain mix-blend-multiply" alt="signature" crossOrigin="anonymous" referrerPolicy="no-referrer" /></div>}
                   {appUser.role === 'admin' ? (
                     <select value={generalInfo.creatorName || ''} onChange={handleCreatorChange} className="border-b border-gray-400 w-48 text-center text-[15px] font-bold text-blue-800 outline-none appearance-none bg-transparent cursor-pointer print-hidden relative z-10 pb-0.5 h-8">
                       <option value="">- ระบุผู้จัดทำ -</option>{allAccounts.map(a => <option key={a.id} value={a.name || a.username}>{a.name || a.username}</option>)}
@@ -941,21 +1270,46 @@ const App: React.FC = () => {
               return lines;
             })();
 
+            const isHidden = !!item.hiddenInExport;
+
             return (
-              <div key={item.id} className="print-center-page w-full relative mb-10 print:mb-0">
-                <div className="print-content-wrapper w-full border-2 border-gray-800 p-1 relative rounded bg-white hover:z-50 transition-all duration-300 shadow-sm hover:shadow-md">
-                  <div className="absolute top-0 left-0 bg-gray-800 text-white px-4 py-1.5 text-sm font-bold z-10 rounded-br">รายการที่ {index + 1}</div>
+              <div key={item.id} className={`print-center-page w-full relative mb-10 print:mb-0 ${isHidden ? 'print:hidden' : ''}`} data-hidden-export={isHidden ? 'true' : 'false'}>
+                <div className={`print-content-wrapper w-full border-2 p-1 relative rounded bg-white hover:z-50 transition-all duration-300 shadow-sm hover:shadow-md ${isHidden ? 'border-amber-400 ring-2 ring-amber-200' : 'border-gray-800'}`}>
+                  <div className={`absolute top-0 left-0 text-white px-4 py-1.5 text-sm font-bold z-10 rounded-br flex items-center gap-2 ${isHidden ? 'bg-amber-600' : 'bg-gray-800'}`}>
+                    <span>รายการที่ {index + 1}</span>
+                    {isHidden && (
+                      <span className="no-print bg-amber-800/80 text-amber-200 text-xs px-2 py-0.5 rounded font-normal flex items-center gap-1">
+                        <EyeOff size={12} /> ไม่แสดงใน PDF
+                      </span>
+                    )}
+                  </div>
                   
                   <div className="no-print absolute -top-4 right-0 sm:right-0 flex gap-1.5 z-30">
                     {index > 0 && <button onClick={() => moveItemUp(index)} className="bg-gray-700 text-white rounded-full p-2 hover:bg-gray-800 shadow-md transition-transform hover:scale-110" title="เลื่อนขึ้น"><ChevronUp size={16} /></button>}
                     {index < items.length - 1 && <button onClick={() => moveItemDown(index)} className="bg-gray-700 text-white rounded-full p-2 hover:bg-gray-800 shadow-md transition-transform hover:scale-110" title="เลื่อนลง"><ChevronDown size={16} /></button>}
+                    <button 
+                      onClick={() => toggleHideItem(item.id)} 
+                      className={`${isHidden ? 'bg-amber-600 hover:bg-amber-700 text-white ring-2 ring-amber-300' : 'bg-gray-600 hover:bg-gray-700 text-white'} rounded-full p-2 shadow-md transition-transform hover:scale-110 flex items-center justify-center`} 
+                      title={isHidden ? 'คลิกเพื่อแสดงใน PDF' : 'คลิกเพื่อซ่อนจาก PDF'}
+                    >
+                      {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                     <button onClick={() => duplicateItem(index)} className="bg-blue-500 text-white rounded-full p-2 hover:bg-blue-600 shadow-md transition-transform hover:scale-110" title="ทำสำเนา"><Copy size={16} /></button>
                     <button onClick={() => removeItem(item.id)} className="bg-red-500 text-white rounded-full p-2 hover:bg-red-600 shadow-md transition-transform hover:scale-110" title="ลบ"><Trash2 size={16} /></button>
                   </div>
 
-                  <div className="border border-gray-300 print:border-0 flex flex-col lg:flex-row print:flex-row h-auto lg:h-[750px] print:h-[185mm] mt-8 md:mt-0 bg-white relative overflow-hidden w-full box-border">
+                  <div className={`pdf-item-container border border-gray-300 print:border-0 flex flex-col lg:flex-row print:flex-row h-auto lg:h-[750px] print:h-[185mm] mt-8 md:mt-0 bg-white relative overflow-hidden w-full box-border ${isHidden ? 'opacity-90' : ''}`}>
+                    {/* Watermark overlay when item is hidden from export (no-print so it never appears if printed) */}
+                    {isHidden && (
+                      <div className="no-print absolute inset-0 z-40 pointer-events-none flex items-center justify-center bg-amber-500/10 backdrop-blur-[0.5px]">
+                        <div className="bg-red-600/90 text-white font-extrabold text-4xl sm:text-6xl tracking-widest px-8 py-4 rounded-2xl shadow-2xl border-4 border-white/80 rotate-[-12deg] select-none flex items-center gap-4">
+                          <EyeOff size={44} className="stroke-[2.5]" />
+                          <span>ไม่แสดง</span>
+                        </div>
+                      </div>
+                    )}
                     {/* Left Column (70%) - no divider border in print mode */}
-                    <div className="w-full lg:w-[70%] print:w-[70%] min-h-[400px] h-[50vh] sm:h-[60vh] lg:h-full print:h-full border-b lg:border-b-0 print:border-b-0 lg:border-r print:border-r-0 border-gray-300 flex flex-col bg-white relative z-20">
+                    <div className="pdf-item-left w-full lg:w-[70%] print:w-[70%] min-h-[400px] h-[50vh] sm:h-[60vh] lg:h-full print:h-full border-b lg:border-b-0 print:border-b-0 lg:border-r print:border-r-0 border-gray-300 flex flex-col bg-white relative z-20">
                       
                       {/* Site photo area (รูปหน้างาน) with frame matching sample photo area */}
                       <div className="flex-1 w-full border-b print:border-b-0 border-gray-300 flex flex-col relative bg-gray-50 p-2 shrink-0 overflow-hidden box-border">
@@ -965,8 +1319,8 @@ const App: React.FC = () => {
                       </div>
                       
                       {/* Sample photo area (รูปตัวอย่าง) */}
-                      <div className="h-[25%] lg:h-[30%] print:h-[30%] min-h-[100px] w-full p-2 bg-gray-50 flex items-center overflow-x-auto">
-                        <div className="w-full h-full min-w-[350px] md:min-w-[400px] grid grid-cols-4 gap-1.5 sm:gap-2 print:gap-4">
+                      <div className="pdf-sample-row h-[25%] lg:h-[30%] print:h-[30%] min-h-[100px] w-full p-2 bg-gray-50 flex items-center overflow-x-auto">
+                        <div className="pdf-sample-grid w-full h-full min-w-[350px] md:min-w-[400px] grid grid-cols-4 gap-1.5 sm:gap-2 print:gap-4">
                           <InfoCard title="รูปแบบม่าน" imgUrl={styleImg1} text1={`${sMain1 || '-'} ${item.layers === 2 ? `/ ${sMain2 || '-'}` : ''}`} fallbackType="style" />
                           <InfoCard 
                             title={txtMain || 'ชั้นที่ 1'} 
@@ -994,7 +1348,7 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Right Column (30%) */}
-                    <div className="w-full lg:w-[30%] print:w-[30%] text-xs flex flex-col bg-white overflow-y-auto print:overflow-hidden min-h-[400px] lg:h-full print:h-[185mm] relative z-10 print:justify-start">
+                    <div className="pdf-item-right w-full lg:w-[30%] print:w-[30%] text-xs flex flex-col bg-white overflow-y-auto print:overflow-hidden min-h-[400px] lg:h-full print:h-[185mm] relative z-10 print:justify-start">
                       
                       {/* ========================================================================= */}
                       {/* WEB EDITOR VIEW (Preserved exactly as is - ไม่ต้องแก้ที่หน้ากรอกข้อมูล) */}
@@ -1283,8 +1637,46 @@ const App: React.FC = () => {
         <button onClick={saveData} disabled={saving} className={`group relative ${saving ? 'bg-gray-500' : 'bg-indigo-600 hover:bg-indigo-700'} text-white rounded-full p-4 shadow-xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-white w-14 h-14`} title="บันทึกงาน"><Save size={24} /><span className="absolute right-[110%] bg-indigo-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity mr-2">บันทึกงาน</span>{saveStatus && <span className="absolute right-[110%] mr-2 bg-green-600 text-white px-3 py-1.5 rounded text-sm font-bold whitespace-nowrap shadow-lg">{saveStatus}</span>}</button>
         <button onClick={addItem} className="group relative bg-green-600 hover:bg-green-700 text-white rounded-full p-4 shadow-xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-white w-14 h-14" title="เพิ่มหน้าต่างบานใหม่"><Plus size={24} /><span className="absolute right-[110%] bg-green-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity mr-2">เพิ่มหน้าต่าง</span></button>
         <button onClick={handleSharePDF} className="group relative bg-orange-500 hover:bg-orange-600 text-white rounded-full p-4 shadow-xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-white w-14 h-14" title="แชร์เป็น PDF (แนวนอน)"><Share2 size={24} /><span className="absolute right-[110%] bg-orange-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity mr-2">แชร์ PDF</span></button>
+        <button onClick={downloadPDFDirectly} disabled={pdfExportProgress?.active} className={`group relative ${pdfExportProgress?.active ? 'bg-gray-500 cursor-wait' : 'bg-red-600 hover:bg-red-700'} text-white rounded-full p-4 shadow-xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-white w-14 h-14`} title="ดาวน์โหลดไฟล์ PDF โดยตรง (บีบอัดขนาดเล็ก คมชัด)"><Download size={24} /><span className="absolute right-[110%] bg-red-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity mr-2">ดาวน์โหลด PDF</span></button>
         <button onClick={printDocument} className="group relative bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-white w-14 h-14" title="พิมพ์เอกสาร"><Printer size={24} /><span className="absolute right-[110%] bg-blue-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity mr-2">พิมพ์</span></button>
       </div>
+
+      {pdfExportProgress?.active && (
+        <div className="pdf-progress-modal fixed inset-0 bg-black/60 z-[99999999] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-3">
+              <Download size={32} className="animate-bounce" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-800 mb-1">กำลังสร้างไฟล์ PDF...</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              {pdfExportProgress.message || `กำลังประมวลผลหน้า ${pdfExportProgress.current} จาก ${pdfExportProgress.total} หน้า`}
+            </p>
+            
+            {/* Progress Percentage Display */}
+            <div className="w-full flex items-center justify-between text-xs font-bold text-gray-600 mb-1.5 px-1">
+              <span>ความคืบหน้า</span>
+              <span className="text-red-600 text-sm">
+                {pdfExportProgress.percent !== undefined 
+                  ? `${pdfExportProgress.percent}%` 
+                  : `${Math.round((pdfExportProgress.current / pdfExportProgress.total) * 100)}%`}
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden border border-gray-200">
+              <div
+                className="bg-gradient-to-r from-red-500 to-red-600 h-full rounded-full transition-all duration-300"
+                style={{ 
+                  width: `${pdfExportProgress.percent !== undefined 
+                    ? pdfExportProgress.percent 
+                    : (pdfExportProgress.current / pdfExportProgress.total) * 100}%` 
+                }}
+              ></div>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-2">
+              หน้า {pdfExportProgress.current} / {pdfExportProgress.total}
+            </p>
+          </div>
+        </div>
+      )}
 
       {showIOSPrintModal && (
         <div className="fixed inset-0 bg-black/70 z-[99999999] flex items-center justify-center p-4">
