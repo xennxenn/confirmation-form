@@ -1,6 +1,6 @@
 import React from 'react';
 import { AutoFitText } from './AutoFitText';
-import { optImg, getCachedDataUrl } from '../utils';
+import { optImg, getCachedDataUrl, extractElementImageDataUrl } from '../utils';
 
 interface InfoCardProps {
   title: string;
@@ -41,6 +41,10 @@ const CardImage: React.FC<{
       src={src}
       alt=""
       className="w-full h-full object-cover"
+      crossOrigin="anonymous"
+      onLoad={(e) => {
+        extractElementImageDataUrl(e.target as HTMLImageElement);
+      }}
       onError={() => {
         if (!useRaw && opt !== url) {
           // Retry with original raw URL if optimized transformation failed
@@ -109,9 +113,12 @@ export const InfoCard: React.FC<InfoCardProps> = React.memo(({
   };
 
   return (
-    <div className={`flex flex-col items-center bg-white border border-gray-200 p-1.5 sm:p-2 rounded shadow-sm h-full justify-between overflow-hidden ${isDim ? 'opacity-40 print:opacity-50' : ''}`}>
-      <span className="text-[11px] sm:text-[13px] font-bold text-gray-800 w-full text-center mb-1 sm:mb-2 shrink-0">{title}</span>
-      <div className="flex-1 w-full border border-gray-100 flex items-center justify-center rounded overflow-hidden bg-gray-50 p-0 relative mb-1 sm:mb-2">
+    <div 
+      className={`flex flex-col items-center bg-white border border-gray-200 p-1.5 sm:p-2 rounded shadow-sm h-full justify-between overflow-hidden min-w-0 max-w-full w-full ${isDim ? 'opacity-40 print:opacity-50' : ''}`}
+      style={{ minWidth: 0, maxWidth: '100%', width: '100%', boxSizing: 'border-box' }}
+    >
+      <span className="text-[11px] sm:text-[13px] font-bold text-gray-800 w-full text-center mb-1 sm:mb-2 shrink-0 truncate px-0.5">{title}</span>
+      <div className="flex-1 w-full border border-gray-100 flex items-center justify-center rounded overflow-hidden bg-gray-50 p-0 relative mb-1 sm:mb-2 min-h-0">
         {hasSplit ? (
           <div className="flex w-full h-full">
             {/* Left Box (Blinds Fabric) */}
@@ -135,7 +142,7 @@ export const InfoCard: React.FC<InfoCardProps> = React.memo(({
           <CardImage url={imgUrl} renderFallback={renderFallback} />
         )}
       </div>
-      <div className="w-full flex flex-col items-center text-center">
+      <div className="w-full flex flex-col items-center text-center overflow-hidden min-w-0 max-w-full">
         <AutoFitText text={text1 || '-'} className="text-blue-800 print:text-black font-semibold text-xs" />
         {text2 && (
           <span className="text-[9px] text-gray-500 font-semibold truncate max-w-full mt-0.5 leading-none">

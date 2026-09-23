@@ -10,7 +10,63 @@ export const getCachedDataUrl = (url: string | null | undefined): string | null 
   return dataUrlCache.get(url) || null;
 };
 
-export const preloadImageDataUrl = async (url: string | null | undefined, timeoutMs: number = 2000): Promise<string> => {
+export const cacheDataUrl = (url: string, dataUrl: string) => {
+  if (url && dataUrl) {
+    dataUrlCache.set(url, dataUrl);
+  }
+};
+
+export const extractElementImageDataUrl = (img: HTMLImageElement): string | null => {
+  if (!img || !img.complete || !img.naturalWidth || !img.naturalHeight) return null;
+  const src = img.src || img.getAttribute('src') || '';
+  if (!src) return null;
+
+  // If already cached as a clean data URL, retain it
+  if (dataUrlCache.has(src)) return dataUrlCache.get(src)!;
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0);
+
+    const isLogoOrSig = src.includes('signature') || 
+                        src.includes('logo') || 
+                        src.includes('1xT2ysUSWkTcFxs1ztoGxZuQcnO_c66Tu') ||
+                        (img.alt && (img.alt.toLowerCase().includes('signature') || img.alt.toLowerCase().includes('logo'))) ||
+                        img.classList.contains('mix-blend-multiply');
+
+    if (isLogoOrSig) {
+      try {
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          // If pixel is white or near-white background (R > 200, G > 200, B > 200),
+          // turn it completely transparent so no square or background color ever shows in PDF!
+          if (data[i] > 200 && data[i+1] > 200 && data[i+2] > 200) {
+            data[i+3] = 0;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+      } catch (e) {
+        // Tainted canvas
+      }
+    }
+
+    // CRITICAL: NEVER use image/jpeg!
+    // Using image/jpeg replaces all transparent pixels with solid black (#000000)!
+    // ALWAYS use image/png so transparency is 100% preserved.
+    const dataUrl = canvas.toDataURL('image/png');
+    dataUrlCache.set(src, dataUrl);
+    return dataUrl;
+  } catch (e) {
+    return null;
+  }
+};
+
+export const preloadImageDataUrl = async (url: string | null | undefined, timeoutMs: number = 12000): Promise<string> => {
   if (!url) return '';
   if (url.startsWith('data:') || url.startsWith('blob:')) return url;
   if (dataUrlCache.has(url)) return dataUrlCache.get(url)!;
@@ -27,9 +83,44 @@ export const preloadImageDataUrl = async (url: string | null | undefined, timeou
       return await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-          const result = reader.result as string;
-          dataUrlCache.set(url, result);
-          resolve(result);
+          let result = reader.result as string;
+          const isLogoOrSig = url.includes('signature') || 
+                              url.includes('logo') || 
+                              url.includes('1xT2ysUSWkTcFxs1ztoGxZuQcnO_c66Tu');
+
+          if (isLogoOrSig) {
+            const tempImg = new Image();
+            tempImg.onload = () => {
+              try {
+                const canvas = document.createElement('canvas');
+                canvas.width = tempImg.naturalWidth;
+                canvas.height = tempImg.naturalHeight;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (ctx) {
+                  ctx.drawImage(tempImg, 0, 0);
+                  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                  const data = imgData.data;
+                  for (let i = 0; i < data.length; i += 4) {
+                    if (data[i] > 200 && data[i+1] > 200 && data[i+2] > 200) {
+                      data[i+3] = 0;
+                    }
+                  }
+                  ctx.putImageData(imgData, 0, 0);
+                  result = canvas.toDataURL('image/png');
+                }
+              } catch (e) {}
+              dataUrlCache.set(url, result);
+              resolve(result);
+            };
+            tempImg.onerror = () => {
+              dataUrlCache.set(url, result);
+              resolve(result);
+            };
+            tempImg.src = result;
+          } else {
+            dataUrlCache.set(url, result);
+            resolve(result);
+          }
         };
         reader.onerror = () => resolve(url);
         reader.readAsDataURL(blob);

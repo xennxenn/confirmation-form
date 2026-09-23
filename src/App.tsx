@@ -5,7 +5,7 @@ import { doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot } from 
 
 import { auth, db, appId } from './firebase';
 import { DEFAULT_DB, DEFAULT_ACCOUNTS, PRESET_COLORS, ACCEPTED_IMAGE_FORMATS, CurtainItem, AreaItem, GeneralInfo, Account } from './types';
-import { optImg, processImageFile, uploadImageToCloudinary, preloadImageDataUrl, getCachedDataUrl } from './utils';
+import { optImg, processImageFile, uploadImageToCloudinary, preloadImageDataUrl, getCachedDataUrl, cacheDataUrl, extractElementImageDataUrl } from './utils';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas-pro';
 
@@ -86,7 +86,10 @@ const App: React.FC = () => {
             }
             ctx.putImageData(imgData, 0, 0);
           }
-          setLogoSrc(canvas.toDataURL('image/png'));
+          const cleanLogo = canvas.toDataURL('image/png');
+          setLogoSrc(cleanLogo);
+          cacheDataUrl("https://lh3.googleusercontent.com/d/1xT2ysUSWkTcFxs1ztoGxZuQcnO_c66Tu", cleanLogo);
+          cacheDataUrl(cleanLogo, cleanLogo);
         } catch (e) { console.warn("Logo CORS error, using CSS fallback."); }
       };
       img.src = "https://lh3.googleusercontent.com/d/1xT2ysUSWkTcFxs1ztoGxZuQcnO_c66Tu";
@@ -362,22 +365,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSharePDF = async () => {
-    if (isInsideIframe() && isIOSDevice()) {
-      await saveData();
-      setShowIOSPrintModal(true);
-      return;
-    }
-    const originalTitle = document.title;
-    document.title = `ใบสรุปงานติดตั้งผ้าม่าน คุณ ${generalInfo.customerName || 'ลูกค้า'}`;
-    try {
-      window.print();
-    } catch (e) {
-      console.error(e);
-    }
-    setTimeout(() => { document.title = originalTitle; }, 2000);
-  };
-
   const handleOpenInNewTabForPrint = async () => {
     const pId = await saveData();
     if (pId) {
@@ -433,7 +420,7 @@ const App: React.FC = () => {
     return combinedCss;
   };
 
-  const downloadPDFDirectly = async () => {
+  const downloadPDFDirectly = async (action: 'download' | 'share' = 'download') => {
     if (pdfExportProgress?.active) return;
     
     // Set initial progress immediately so user has instant feedback
@@ -445,6 +432,14 @@ const App: React.FC = () => {
     let prevScrollY = window.scrollY;
 
     try {
+      // Step 0: Extract all currently rendered <img> elements into dataUrlCache directly from canvas
+      try {
+        const liveImgs = Array.from(document.querySelectorAll('img'));
+        for (const imgEl of liveImgs) {
+          extractElementImageDataUrl(imgEl);
+        }
+      } catch (e) {}
+
       // Filter out hidden items so they are not included in PDF download
       const allPages = Array.from(document.querySelectorAll('.print-center-page'));
       const pageElements = allPages.filter(el => el.getAttribute('data-hidden-export') !== 'true');
@@ -458,14 +453,14 @@ const App: React.FC = () => {
       const totalPages = pageElements.length;
       setPdfExportProgress({ current: 0, total: totalPages, percent: 5, message: 'กำลังตรวจสอบและเตรียมมาสก์รูปภาพ...', active: true });
 
-      // Step 1: Preload all masks, fabrics, style icons, and sample images in parallel with strict timeout
+      // Step 1: Preload all masks, fabrics, style icons, and sample images in parallel with 12s timeout
       const urlsToPreload = new Set<string>();
 
       // Preload cover page logo & signature
       if (logoSrc) urlsToPreload.add(logoSrc);
       if (generalInfo.creatorSignature) {
         urlsToPreload.add(generalInfo.creatorSignature);
-        urlsToPreload.add(optImg(generalInfo.creatorSignature, 300));
+        urlsToPreload.add(optImg(generalInfo.creatorSignature, 300, true));
       }
 
       items.filter(it => !it.hiddenInExport).forEach(it => {
@@ -526,7 +521,7 @@ const App: React.FC = () => {
         const totalUrls = urlsToPreload.size;
         const preloadPromises = Array.from(urlsToPreload).map(async (u) => {
           try {
-            await preloadImageDataUrl(u, 1800);
+            await preloadImageDataUrl(u, 12000);
           } catch (e) {
             // continue on single image timeout or CORS
           }
@@ -605,6 +600,37 @@ const App: React.FC = () => {
               clonedDoc.head.appendChild(styleEl);
             } catch (e) {}
 
+            // Replace all <img> src with Base64 data URLs from cache to guarantee no blank images or iOS WebKit CORS issues
+            clonedDoc.querySelectorAll('img').forEach((imgNode: any) => {
+              const currentSrc = imgNode.src || imgNode.getAttribute('src');
+              if (currentSrc) {
+                const cached = getCachedDataUrl(currentSrc);
+                if (cached) {
+                  imgNode.src = cached;
+                  imgNode.removeAttribute('crossorigin');
+                }
+              }
+              const isLogoOrSig = (imgNode.alt && (imgNode.alt.toLowerCase().includes('logo') || imgNode.alt.toLowerCase().includes('signature'))) ||
+                                  (currentSrc && (currentSrc.includes('signature') || currentSrc.includes('logo') || currentSrc.includes('1xT2ysUSWkTcFxs1ztoGxZuQcnO_c66Tu')));
+              if (isLogoOrSig) {
+                imgNode.style.setProperty('background', 'transparent', 'important');
+                imgNode.style.setProperty('background-color', 'transparent', 'important');
+                imgNode.style.setProperty('mix-blend-mode', 'normal', 'important');
+              }
+            });
+
+            // Replace all SVG <image> hrefs with cached Base64 data URLs
+            clonedDoc.querySelectorAll('svg image').forEach((svgImg: any) => {
+              const href = svgImg.getAttribute('href') || svgImg.getAttribute('xlink:href');
+              if (href) {
+                const cached = getCachedDataUrl(href);
+                if (cached) {
+                  svgImg.setAttribute('href', cached);
+                  svgImg.setAttribute('xlink:href', cached);
+                }
+              }
+            });
+
             // Hide interactive/non-print elements
             clonedDoc.querySelectorAll('.no-print, .cursor-context-menu, .cursor-move, .pdf-progress-modal, .print-hidden, select').forEach((node: any) => {
               node.style.setProperty('display', 'none', 'important');
@@ -612,6 +638,7 @@ const App: React.FC = () => {
             clonedDoc.querySelectorAll('.print-block').forEach((node: any) => {
               node.style.setProperty('display', 'block', 'important');
             });
+
             // Enforce explicit document dimensions for universal consistency across mobile and desktop
             if (clonedDoc.documentElement) {
               clonedDoc.documentElement.style.setProperty('width', '1122.5px', 'important');
@@ -625,16 +652,6 @@ const App: React.FC = () => {
               clonedDoc.body.style.setProperty('max-width', '1122.5px', 'important');
               clonedDoc.body.style.setProperty('overflow', 'hidden', 'important');
             }
-
-            clonedDoc.querySelectorAll('.print-flex').forEach((node: any) => {
-              node.style.setProperty('display', 'flex', 'important');
-              node.style.setProperty('flex-direction', 'column', 'important');
-              node.style.setProperty('width', '100%', 'important');
-              node.style.setProperty('height', '100%', 'important');
-              node.style.setProperty('box-sizing', 'border-box', 'important');
-              node.style.setProperty('overflow', 'hidden', 'important');
-              node.style.setProperty('gap', '10px', 'important');
-            });
 
             // Enforce explicit dimensions on cloned page elements for universal consistency across all screens
             clonedDoc.querySelectorAll('.print-center-page').forEach((page: any) => {
@@ -665,6 +682,47 @@ const App: React.FC = () => {
             clonedDoc.querySelectorAll('.print-cover-wrapper').forEach((wrap: any) => {
               wrap.style.setProperty('border', 'none', 'important');
               wrap.style.setProperty('box-shadow', 'none', 'important');
+              wrap.style.setProperty('padding', '0', 'important');
+              wrap.style.setProperty('width', '1044px', 'important');
+              wrap.style.setProperty('max-width', '1044px', 'important');
+              wrap.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            // Cover Page Header (Logo & Title side-by-side)
+            clonedDoc.querySelectorAll('.print-cover-wrapper .border-b-2').forEach((header: any) => {
+              header.style.setProperty('display', 'flex', 'important');
+              header.style.setProperty('flex-direction', 'row', 'important');
+              header.style.setProperty('justify-content', 'space-between', 'important');
+              header.style.setProperty('align-items', 'center', 'important');
+              header.style.setProperty('width', '100%', 'important');
+              header.style.setProperty('border-bottom', '2px solid #1f2937', 'important');
+              header.style.setProperty('padding-bottom', '10px', 'important');
+              header.style.setProperty('margin-bottom', '16px', 'important');
+              header.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            // Cover Page 2-column Grid
+            clonedDoc.querySelectorAll('.pdf-cover-grid').forEach((grid: any) => {
+              grid.style.setProperty('display', 'grid', 'important');
+              grid.style.setProperty('grid-template-columns', '1fr 1fr', 'important');
+              grid.style.setProperty('gap', '20px', 'important');
+              grid.style.setProperty('width', '100%', 'important');
+              grid.style.setProperty('margin-bottom', '14px', 'important');
+              grid.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            // Cover Page 2 cards (ส่วนผู้จัดทำ & ส่วนลูกค้า)
+            clonedDoc.querySelectorAll('.pdf-cover-grid > div').forEach((card: any) => {
+              card.style.setProperty('height', '375px', 'important');
+              card.style.setProperty('max-height', '375px', 'important');
+              card.style.setProperty('border', '1px solid #d1d5db', 'important');
+              card.style.setProperty('border-radius', '6px', 'important');
+              card.style.setProperty('padding', '16px', 'important');
+              card.style.setProperty('background-color', '#ffffff', 'important');
+              card.style.setProperty('display', 'flex', 'important');
+              card.style.setProperty('flex-direction', 'column', 'important');
+              card.style.setProperty('justify-content', 'space-between', 'important');
+              card.style.setProperty('box-sizing', 'border-box', 'important');
             });
 
             // Only item pages have the 2px rounded outer black border
@@ -674,16 +732,10 @@ const App: React.FC = () => {
               wrap.style.setProperty('border-color', '#1f2937', 'important');
               wrap.style.setProperty('border-radius', '6px', 'important');
               wrap.style.setProperty('overflow', 'hidden', 'important');
+              wrap.style.setProperty('background', '#ffffff', 'important');
             });
 
-            clonedDoc.querySelectorAll('.pdf-cover-grid').forEach((grid: any) => {
-              grid.style.setProperty('display', 'grid', 'important');
-              grid.style.setProperty('grid-template-columns', '1fr 1fr', 'important');
-              grid.style.setProperty('gap', '24px', 'important');
-              grid.style.setProperty('width', '100%', 'important');
-              grid.style.setProperty('margin-bottom', '20px', 'important');
-            });
-
+            // Item container: exact 2-column layout (Left 70%, Right 30%)
             clonedDoc.querySelectorAll('.pdf-item-container').forEach((container: any) => {
               container.style.setProperty('display', 'flex', 'important');
               container.style.setProperty('flex-direction', 'row', 'important');
@@ -699,6 +751,7 @@ const App: React.FC = () => {
               container.style.setProperty('box-sizing', 'border-box', 'important');
             });
 
+            // Left Column (70%)
             clonedDoc.querySelectorAll('.pdf-item-left').forEach((col: any) => {
               col.style.setProperty('display', 'flex', 'important');
               col.style.setProperty('flex-direction', 'column', 'important');
@@ -714,6 +767,7 @@ const App: React.FC = () => {
               col.style.setProperty('box-sizing', 'border-box', 'important');
             });
 
+            // Site Photo Area
             clonedDoc.querySelectorAll('.pdf-site-photo-area').forEach((area: any) => {
               area.style.setProperty('display', 'flex', 'important');
               area.style.setProperty('flex-direction', 'column', 'important');
@@ -725,17 +779,106 @@ const App: React.FC = () => {
               area.style.setProperty('overflow', 'hidden', 'important');
               area.style.setProperty('box-sizing', 'border-box', 'important');
               area.style.setProperty('padding', '8px', 'important');
+              area.style.setProperty('background', '#f9fafb', 'important');
             });
 
+            // Site Photo Frame & inner fit container
             clonedDoc.querySelectorAll('.pdf-site-photo-frame').forEach((frame: any) => {
               frame.style.setProperty('display', 'flex', 'important');
-              frame.style.setProperty('flex-direction', 'column', 'important');
+              frame.style.setProperty('align-items', 'center', 'important');
+              frame.style.setProperty('justify-content', 'center', 'important');
               frame.style.setProperty('width', '100%', 'important');
               frame.style.setProperty('height', '100%', 'important');
               frame.style.setProperty('overflow', 'hidden', 'important');
               frame.style.setProperty('position', 'relative', 'important');
+              frame.style.setProperty('background', '#ffffff', 'important');
+              frame.style.setProperty('border', '1px solid #e5e7eb', 'important');
+              frame.style.setProperty('border-radius', '4px', 'important');
+
+              const fitContainer = frame.querySelector('.print-fit-container') as HTMLElement;
+              if (fitContainer) {
+                const imgEl = fitContainer.querySelector('img') as HTMLImageElement;
+                let ri = 4 / 3;
+                if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight) {
+                  ri = imgEl.naturalWidth / imgEl.naturalHeight;
+                }
+                const frameW = 714.8;
+                const frameH = 473.5;
+                const rc = frameW / frameH;
+                let targetW = frameW;
+                let targetH = frameH;
+
+                const isFill = fitContainer.classList.contains('print-fit-container-fill');
+                if (isFill) {
+                  if (ri > rc) { targetH = frameH; targetW = frameH * ri; }
+                  else { targetW = frameW; targetH = frameW / ri; }
+                } else {
+                  if (ri > rc) { targetW = frameW; targetH = frameW / ri; }
+                  else { targetH = frameH; targetW = frameH * ri; }
+                }
+
+                fitContainer.style.setProperty('width', `${targetW}px`, 'important');
+                fitContainer.style.setProperty('height', `${targetH}px`, 'important');
+                fitContainer.style.setProperty('position', 'relative', 'important');
+                fitContainer.style.setProperty('display', 'block', 'important');
+                fitContainer.style.setProperty('margin', 'auto', 'important');
+                fitContainer.style.setProperty('flex-shrink', '0', 'important');
+
+                if (imgEl) {
+                  imgEl.style.setProperty('width', '100%', 'important');
+                  imgEl.style.setProperty('height', '100%', 'important');
+                  imgEl.style.setProperty('position', 'absolute', 'important');
+                  imgEl.style.setProperty('top', '0', 'important');
+                  imgEl.style.setProperty('left', '0', 'important');
+                  imgEl.style.setProperty('display', 'block', 'important');
+                }
+
+                const svgEl = fitContainer.querySelector('svg');
+                if (svgEl) {
+                  svgEl.style.setProperty('width', '100%', 'important');
+                  svgEl.style.setProperty('height', '100%', 'important');
+                  svgEl.style.setProperty('position', 'absolute', 'important');
+                  svgEl.style.setProperty('top', '0', 'important');
+                  svgEl.style.setProperty('left', '0', 'important');
+                }
+              }
             });
 
+            // Sample Photo Row (bottom of left column: 209.7px)
+            clonedDoc.querySelectorAll('.pdf-sample-row').forEach((row: any) => {
+              row.style.setProperty('display', 'block', 'important');
+              row.style.setProperty('width', '100%', 'important');
+              row.style.setProperty('height', '209.7px', 'important');
+              row.style.setProperty('max-height', '209.7px', 'important');
+              row.style.setProperty('min-height', '209.7px', 'important');
+              row.style.setProperty('flex', '0 0 209.7px', 'important');
+              row.style.setProperty('overflow', 'hidden', 'important');
+              row.style.setProperty('box-sizing', 'border-box', 'important');
+              row.style.setProperty('padding', '8px', 'important');
+              row.style.setProperty('background', '#f9fafb', 'important');
+              row.style.setProperty('border-top', '1px solid #e5e7eb', 'important');
+            });
+
+            // Sample Grid: exactly 4 equal columns using repeat(4, minmax(0, 1fr))
+            clonedDoc.querySelectorAll('.pdf-sample-grid').forEach((grid: any) => {
+              grid.style.setProperty('display', 'grid', 'important');
+              grid.style.setProperty('grid-template-columns', 'repeat(4, minmax(0, 1fr))', 'important');
+              grid.style.setProperty('gap', '10px', 'important');
+              grid.style.setProperty('width', '100%', 'important');
+              grid.style.setProperty('height', '100%', 'important');
+              grid.style.setProperty('min-width', '0', 'important');
+              grid.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.pdf-sample-grid > div').forEach((card: any) => {
+              card.style.setProperty('min-width', '0', 'important');
+              card.style.setProperty('max-width', '100%', 'important');
+              card.style.setProperty('width', '100%', 'important');
+              card.style.setProperty('overflow', 'hidden', 'important');
+              card.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            // Right Column (30%)
             clonedDoc.querySelectorAll('.pdf-item-right').forEach((col: any) => {
               col.style.setProperty('display', 'flex', 'important');
               col.style.setProperty('flex-direction', 'column', 'important');
@@ -750,24 +893,18 @@ const App: React.FC = () => {
               col.style.setProperty('justify-content', 'flex-start', 'important');
               col.style.setProperty('border', 'none', 'important');
               col.style.setProperty('box-sizing', 'border-box', 'important');
+              col.style.setProperty('background', '#ffffff', 'important');
             });
 
-            clonedDoc.querySelectorAll('.pdf-sample-row').forEach((row: any) => {
-              row.style.setProperty('display', 'flex', 'important');
-              row.style.setProperty('width', '100%', 'important');
-              row.style.setProperty('height', '209.7px', 'important');
-              row.style.setProperty('max-height', '209.7px', 'important');
-              row.style.setProperty('min-height', '209.7px', 'important');
-              row.style.setProperty('flex', '0 0 209.7px', 'important');
-              row.style.setProperty('box-sizing', 'border-box', 'important');
-            });
-
-            clonedDoc.querySelectorAll('.pdf-sample-grid').forEach((grid: any) => {
-              grid.style.setProperty('display', 'grid', 'important');
-              grid.style.setProperty('grid-template-columns', 'repeat(4, 1fr)', 'important');
-              grid.style.setProperty('gap', '16px', 'important');
-              grid.style.setProperty('width', '100%', 'important');
-              grid.style.setProperty('height', '100%', 'important');
+            clonedDoc.querySelectorAll('.pdf-item-right .print-flex').forEach((node: any) => {
+              node.style.setProperty('display', 'flex', 'important');
+              node.style.setProperty('flex-direction', 'column', 'important');
+              node.style.setProperty('width', '100%', 'important');
+              node.style.setProperty('height', '100%', 'important');
+              node.style.setProperty('padding', '8px', 'important');
+              node.style.setProperty('box-sizing', 'border-box', 'important');
+              node.style.setProperty('overflow', 'hidden', 'important');
+              node.style.setProperty('gap', '10px', 'important');
             });
           },
           ignoreElements: (element) => {
@@ -819,6 +956,43 @@ const App: React.FC = () => {
       const safeCust = rawCust.replace(/[\/\\:*?"<>|]/g, '_');
       const fileName = `ใบสรุปงานติดตั้งผ้าม่าน_คุณ_${safeCust}.pdf`;
 
+      const pdfBlob = pdf.output('blob');
+
+      if (action === 'share' && navigator.canShare) {
+        try {
+          const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: fileName,
+              text: `ใบสรุปงานติดตั้งผ้าม่าน คุณ ${rawCust}`
+            });
+            setPdfExportProgress({ 
+              current: totalPages, 
+              total: totalPages, 
+              percent: 100, 
+              message: '✅ แชร์ไฟล์ PDF สำเร็จเรียบร้อย!', 
+              active: true 
+            });
+            document.body.classList.remove('pdf-exporting');
+            window.dispatchEvent(new Event('resize'));
+            window.scrollTo(prevScrollX, prevScrollY);
+            setTimeout(() => {
+              setPdfExportProgress(null);
+            }, 1500);
+            return;
+          }
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') {
+            document.body.classList.remove('pdf-exporting');
+            window.dispatchEvent(new Event('resize'));
+            window.scrollTo(prevScrollX, prevScrollY);
+            setPdfExportProgress(null);
+            return;
+          }
+        }
+      }
+
       setPdfExportProgress({ 
         current: totalPages, 
         total: totalPages, 
@@ -827,8 +1001,6 @@ const App: React.FC = () => {
         active: true 
       });
 
-      // Generate blob directly to prevent UI freeze
-      const pdfBlob = pdf.output('blob');
       const blobUrl = URL.createObjectURL(pdfBlob);
       const downloadLink = document.createElement('a');
       downloadLink.href = blobUrl;
@@ -866,6 +1038,10 @@ const App: React.FC = () => {
         message: 'เกิดข้อผิดพลาดในการดาวน์โหลด PDF: ' + (err?.message || 'โปรดลองใหม่อีกครั้ง')
       });
     }
+  };
+
+  const handleSharePDF = async () => {
+    return downloadPDFDirectly('share');
   };
 
   const handleGeneralChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setGeneralInfo(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -1328,7 +1504,7 @@ const App: React.FC = () => {
         }
         body.pdf-exporting .pdf-sample-grid,
         .pdf-exporting .pdf-sample-grid {
-          gap: 16px !important;
+          gap: 10px !important;
           display: grid !important;
           grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
           width: 100% !important;
@@ -1411,7 +1587,7 @@ const App: React.FC = () => {
                   <ArrowLeft size={24}/>
                 </button>
                 <div className="w-1/3 text-left flex items-center gap-4">
-                  <img src={logoSrc} alt="Logo" className="h-10 md:h-14 lg:h-16 object-contain" style={logoSrc.startsWith('data:') ? {} : { mixBlendMode: 'multiply', filter: 'contrast(1.1) brightness(1.1)' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                  <img src={logoSrc} alt="Logo" className="h-10 md:h-14 lg:h-16 object-contain" style={{ background: 'transparent' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
                   <div>
                     {appUser.role === 'admin' && <button onClick={()=>setShowDBSettings(true)} className="bg-gray-700 text-white px-3 py-2 rounded flex items-center hover:bg-gray-800 text-xs shadow font-bold transition-all w-fit h-9"><Settings size={16} className="mr-1.5"/> <span className="hidden md:inline">ฐานข้อมูล</span></button>}
                   </div>
@@ -1492,7 +1668,7 @@ const App: React.FC = () => {
               {/* Header: Left Logo, Right Title */}
               <div className="mb-6 border-b-2 border-gray-800 pb-3 flex justify-between items-center w-full">
                 <div className="text-left flex items-center">
-                  <img src={getCachedDataUrl(logoSrc) || logoSrc} alt="Logo" className="h-14 lg:h-16 object-contain" style={logoSrc.startsWith('data:') ? {} : { mixBlendMode: 'multiply', filter: 'contrast(1.1) brightness(1.1)' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                  <img src={getCachedDataUrl(logoSrc) || logoSrc} alt="Logo" className="h-14 lg:h-16 object-contain" style={{ background: 'transparent' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
                 </div>
                 <h1 className="text-2xl font-bold text-gray-800 text-right tracking-wide">ใบสรุปงานติดตั้งผ้าม่าน</h1>
               </div>
@@ -1532,7 +1708,7 @@ const App: React.FC = () => {
                   <div className="mt-8 flex flex-col items-center justify-end h-24">
                     {generalInfo.creatorSignature && (
                       <div className="h-12 w-full flex justify-center items-end mb-1">
-                        <img src={getCachedDataUrl(optImg(generalInfo.creatorSignature, 300)) || optImg(generalInfo.creatorSignature, 300)} className="max-h-full object-contain mix-blend-multiply" alt="signature" crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                        <img src={getCachedDataUrl(optImg(generalInfo.creatorSignature, 300, true)) || optImg(generalInfo.creatorSignature, 300, true)} className="max-h-full object-contain" style={{ background: 'transparent' }} alt="signature" crossOrigin="anonymous" referrerPolicy="no-referrer" />
                       </div>
                     )}
                     <div className="w-52 text-center text-[15px] font-bold text-black pb-0.5">

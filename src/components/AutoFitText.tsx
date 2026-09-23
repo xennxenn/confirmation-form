@@ -37,8 +37,8 @@ export const AutoFitText: React.FC<AutoFitTextProps> = React.memo(({ text, class
 
   if (!text) return null;
   return (
-    <div ref={containerRef} className="w-full overflow-hidden print:overflow-visible px-1 flex items-center justify-center min-h-[20px]">
-      <span ref={textRef} className={`font-bold whitespace-nowrap ${className || ''}`} style={{ display: 'inline-block' }}>{text}</span>
+    <div ref={containerRef} className="w-full overflow-hidden px-0.5 flex items-center justify-center min-h-[18px] max-w-full">
+      <span ref={textRef} className={`font-bold whitespace-nowrap ${className || ''}`} style={{ display: 'inline-block', maxWidth: '100%' }}>{text}</span>
     </div>
   );
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Settings, Plus, Trash2, Upload, Move, X, MousePointerClick, Minimize2, Maximize2 } from 'lucide-react';
-import { optImg, processImageFile, uploadImageToCloudinary, preloadImageDataUrl, getCachedDataUrl } from '../utils';
+import { optImg, processImageFile, uploadImageToCloudinary, preloadImageDataUrl, getCachedDataUrl, cacheDataUrl, extractElementImageDataUrl } from '../utils';
 import { PRESET_COLORS, ACCEPTED_IMAGE_FORMATS } from '../types';
 
 interface ImageAreaEditorProps {
@@ -416,7 +416,7 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
       <div 
         ref={viewportRef}
         className={`relative w-full flex-grow overflow-hidden flex items-center justify-center ${(item.imageFit || 'fit') === 'fit' ? 'bg-white' : 'bg-gray-100'} ${mode === 'pan' ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : (activeAreaId && isDrawing ? 'cursor-crosshair' : 'cursor-default')}`}
-        style={{ touchAction: 'none', clipPath: 'inset(0)', contain: 'paint' }}
+        style={{ touchAction: 'none', overflow: 'hidden' }}
         onMouseDown={handleMouseDown} onTouchStart={handleMouseDown}
         onMouseMove={handleMouseMove} onTouchMove={handleMouseMove}
         onMouseUp={handleMouseUp} onTouchEnd={handleMouseUp}
@@ -458,6 +458,7 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
                       const img = e.target as HTMLImageElement;
                       if (img.naturalWidth > 0 && img.naturalHeight > 0) {
                         setImgNativeSize({ w: img.naturalWidth, h: img.naturalHeight });
+                        extractElementImageDataUrl(img);
                       }
                     }}
                     onError={e => {
