@@ -5,7 +5,7 @@ import { doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot } from 
 
 import { auth, db, appId } from './firebase';
 import { DEFAULT_DB, DEFAULT_ACCOUNTS, PRESET_COLORS, ACCEPTED_IMAGE_FORMATS, CurtainItem, AreaItem, GeneralInfo, Account } from './types';
-import { optImg, processImageFile, uploadImageToCloudinary, preloadImageDataUrl } from './utils';
+import { optImg, processImageFile, uploadImageToCloudinary, preloadImageDataUrl, getCachedDataUrl } from './utils';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas-pro';
 
@@ -387,6 +387,52 @@ const App: React.FC = () => {
     setShowIOSPrintModal(false);
   };
 
+  // Helper to extract and bundle all document stylesheets for html2canvas iframe
+  const getCompleteAppStyles = async (): Promise<string> => {
+    let combinedCss = '';
+
+    // 1. Read directly from accessible CSSStyleSheets
+    for (let i = 0; i < document.styleSheets.length; i++) {
+      try {
+        const sheet = document.styleSheets[i];
+        const rules = sheet.cssRules || sheet.rules;
+        if (rules && rules.length > 0) {
+          for (let j = 0; j < rules.length; j++) {
+            combinedCss += rules[j].cssText + '\n';
+          }
+        }
+      } catch (e) {
+        // Cross-origin stylesheet access restricted
+      }
+    }
+
+    // 2. Fetch external stylesheets if accessible
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
+    await Promise.all(links.map(async (link) => {
+      try {
+        const href = link.href;
+        if (href) {
+          const res = await fetch(href);
+          if (res.ok) {
+            const text = await res.text();
+            combinedCss += '\n/* External: ' + href + ' */\n' + text + '\n';
+          }
+        }
+      } catch (e) {
+        // Ignored
+      }
+    }));
+
+    // 3. Collect inline <style> tags
+    document.querySelectorAll('style').forEach((styleEl) => {
+      if (styleEl.textContent) {
+        combinedCss += '\n' + styleEl.textContent + '\n';
+      }
+    });
+
+    return combinedCss;
+  };
+
   const downloadPDFDirectly = async () => {
     if (pdfExportProgress?.active) return;
     
@@ -414,8 +460,20 @@ const App: React.FC = () => {
 
       // Step 1: Preload all masks, fabrics, style icons, and sample images in parallel with strict timeout
       const urlsToPreload = new Set<string>();
+
+      // Preload cover page logo & signature
+      if (logoSrc) urlsToPreload.add(logoSrc);
+      if (generalInfo.creatorSignature) {
+        urlsToPreload.add(generalInfo.creatorSignature);
+        urlsToPreload.add(optImg(generalInfo.creatorSignature, 300));
+      }
+
       items.filter(it => !it.hiddenInExport).forEach(it => {
-        if (it.image) urlsToPreload.add(it.image);
+        if (it.image) {
+          urlsToPreload.add(it.image);
+          urlsToPreload.add(optImg(it.image, 1600));
+          urlsToPreload.add(optImg(it.image, 1200));
+        }
 
         const primaryArea = it.areas?.[0] || {};
         const sMain1 = primaryArea.styleMain1 || it.styleMain1 || it.styleMain || '';
@@ -483,6 +541,9 @@ const App: React.FC = () => {
 
       setPdfExportProgress({ current: 0, total: totalPages, percent: 16, message: 'กำลังจัดเค้าโครงเอกสาร PDF แนวนอน A4...', active: true });
 
+      // Gather bundled CSS to inject into html2canvas clone
+      const bundledCss = await getCompleteAppStyles();
+
       prevScrollX = window.scrollX;
       prevScrollY = window.scrollY;
       window.scrollTo(0, 0);
@@ -513,7 +574,7 @@ const App: React.FC = () => {
         });
         const el = pageElements[i] as HTMLElement;
 
-        // Render with hardware-accelerated rasterization, skipping hidden/non-print elements
+        // Render with hardware-accelerated rasterization and injected CSS + layout enforcement
         const canvas = await html2canvas(el, {
           scale: 1.5,
           useCORS: true,
@@ -525,6 +586,150 @@ const App: React.FC = () => {
           height: 793.7,
           scrollX: 0,
           scrollY: 0,
+          onclone: (clonedDoc) => {
+            // Sync body and document classes
+            clonedDoc.body.className = document.body.className;
+            clonedDoc.body.classList.add('pdf-exporting');
+            clonedDoc.documentElement.className = document.documentElement.className;
+
+            // Ensure relative assets resolve properly
+            try {
+              const base = clonedDoc.createElement('base');
+              base.href = window.location.href;
+              clonedDoc.head.appendChild(base);
+            } catch (e) {}
+
+            // Inject bundled application CSS
+            try {
+              const styleEl = clonedDoc.createElement('style');
+              styleEl.id = 'pdf-bundled-css';
+              styleEl.textContent = bundledCss;
+              clonedDoc.head.appendChild(styleEl);
+            } catch (e) {}
+
+            // Hide interactive/non-print elements
+            clonedDoc.querySelectorAll('.no-print, .cursor-context-menu, .cursor-move, .pdf-progress-modal, .print-hidden, select').forEach((node: any) => {
+              node.style.setProperty('display', 'none', 'important');
+            });
+            clonedDoc.querySelectorAll('.print-block').forEach((node: any) => {
+              node.style.setProperty('display', 'block', 'important');
+            });
+            clonedDoc.querySelectorAll('.print-flex').forEach((node: any) => {
+              node.style.setProperty('display', 'flex', 'important');
+            });
+
+            // Enforce explicit dimensions on cloned page elements for universal consistency across all screens
+            clonedDoc.querySelectorAll('.print-center-page').forEach((page: any) => {
+              page.style.setProperty('width', '1122.5px', 'important');
+              page.style.setProperty('min-width', '1122.5px', 'important');
+              page.style.setProperty('max-width', '1122.5px', 'important');
+              page.style.setProperty('height', '793.7px', 'important');
+              page.style.setProperty('min-height', '793.7px', 'important');
+              page.style.setProperty('max-height', '793.7px', 'important');
+              page.style.setProperty('padding', '37.8px', 'important');
+              page.style.setProperty('margin', '0 auto', 'important');
+              page.style.setProperty('background', '#ffffff', 'important');
+              page.style.setProperty('display', 'flex', 'important');
+              page.style.setProperty('flex-direction', 'column', 'important');
+              page.style.setProperty('justify-content', 'center', 'important');
+              page.style.setProperty('align-items', 'center', 'important');
+              page.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.print-content-wrapper').forEach((wrap: any) => {
+              wrap.style.setProperty('width', '1044px', 'important');
+              wrap.style.setProperty('min-width', '1044px', 'important');
+              wrap.style.setProperty('max-width', '1044px', 'important');
+              wrap.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            // The cover page (หน้าแรก) has NO outer black border
+            clonedDoc.querySelectorAll('.print-cover-wrapper').forEach((wrap: any) => {
+              wrap.style.setProperty('border', 'none', 'important');
+              wrap.style.setProperty('box-shadow', 'none', 'important');
+            });
+
+            // Only item pages have the 2px rounded outer black border
+            clonedDoc.querySelectorAll('.print-item-wrapper').forEach((wrap: any) => {
+              wrap.style.setProperty('border-width', '2px', 'important');
+              wrap.style.setProperty('border-style', 'solid', 'important');
+              wrap.style.setProperty('border-color', '#1f2937', 'important');
+              wrap.style.setProperty('border-radius', '6px', 'important');
+              wrap.style.setProperty('overflow', 'hidden', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.pdf-cover-grid').forEach((grid: any) => {
+              grid.style.setProperty('display', 'grid', 'important');
+              grid.style.setProperty('grid-template-columns', '1fr 1fr', 'important');
+              grid.style.setProperty('gap', '24px', 'important');
+              grid.style.setProperty('width', '100%', 'important');
+              grid.style.setProperty('margin-bottom', '20px', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.pdf-item-container').forEach((container: any) => {
+              container.style.setProperty('display', 'flex', 'important');
+              container.style.setProperty('flex-direction', 'row', 'important');
+              container.style.setProperty('width', '100%', 'important');
+              container.style.setProperty('max-width', '100%', 'important');
+              container.style.setProperty('min-width', '0', 'important');
+              container.style.setProperty('height', '699.2px', 'important');
+              container.style.setProperty('max-height', '699.2px', 'important');
+              container.style.setProperty('min-height', '699.2px', 'important');
+              container.style.setProperty('overflow', 'hidden', 'important');
+              container.style.setProperty('border', 'none', 'important');
+              container.style.setProperty('margin', '0', 'important');
+              container.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.pdf-item-left').forEach((col: any) => {
+              col.style.setProperty('display', 'flex', 'important');
+              col.style.setProperty('flex-direction', 'column', 'important');
+              col.style.setProperty('width', '70%', 'important');
+              col.style.setProperty('max-width', '70%', 'important');
+              col.style.setProperty('min-width', '70%', 'important');
+              col.style.setProperty('flex', '0 0 70%', 'important');
+              col.style.setProperty('height', '699.2px', 'important');
+              col.style.setProperty('max-height', '699.2px', 'important');
+              col.style.setProperty('min-height', '699.2px', 'important');
+              col.style.setProperty('overflow', 'hidden', 'important');
+              col.style.setProperty('border', 'none', 'important');
+              col.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.pdf-item-right').forEach((col: any) => {
+              col.style.setProperty('display', 'flex', 'important');
+              col.style.setProperty('flex-direction', 'column', 'important');
+              col.style.setProperty('width', '30%', 'important');
+              col.style.setProperty('max-width', '30%', 'important');
+              col.style.setProperty('min-width', '30%', 'important');
+              col.style.setProperty('flex', '0 0 30%', 'important');
+              col.style.setProperty('height', '699.2px', 'important');
+              col.style.setProperty('max-height', '699.2px', 'important');
+              col.style.setProperty('min-height', '699.2px', 'important');
+              col.style.setProperty('overflow', 'hidden', 'important');
+              col.style.setProperty('justify-content', 'flex-start', 'important');
+              col.style.setProperty('border', 'none', 'important');
+              col.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.pdf-sample-row').forEach((row: any) => {
+              row.style.setProperty('display', 'flex', 'important');
+              row.style.setProperty('width', '100%', 'important');
+              row.style.setProperty('height', '209.7px', 'important');
+              row.style.setProperty('max-height', '209.7px', 'important');
+              row.style.setProperty('min-height', '209.7px', 'important');
+              row.style.setProperty('flex', '0 0 209.7px', 'important');
+              row.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.pdf-sample-grid').forEach((grid: any) => {
+              grid.style.setProperty('display', 'grid', 'important');
+              grid.style.setProperty('grid-template-columns', 'repeat(4, 1fr)', 'important');
+              grid.style.setProperty('gap', '16px', 'important');
+              grid.style.setProperty('width', '100%', 'important');
+              grid.style.setProperty('height', '100%', 'important');
+            });
+          },
           ignoreElements: (element) => {
             if (!element) return false;
             const cl = element.classList;
@@ -807,7 +1012,15 @@ const App: React.FC = () => {
       <style>{`
         @media print {
           @page { size: landscape A4; margin: 10mm; }
-          body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; display: block; }
+          body { 
+            background: white; 
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact; 
+            margin: 0; 
+            padding: 0; 
+            display: block; 
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+          }
           .no-print { display: none !important; }
           .pdf-progress-modal { display: none !important; }
           .print-hidden { display: none !important; }
@@ -815,10 +1028,48 @@ const App: React.FC = () => {
           .print-flex { display: flex !important; }
           .avoid-break { page-break-inside: avoid !important; }
           .print-center-page[data-hidden-export="true"] { display: none !important; }
-          .print-center-page { height: 100vh; width: 100%; display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; page-break-after: always !important; page-break-inside: avoid !important; box-sizing: border-box; }
-          .print-content-wrapper { width: 100% !important; max-width: 277mm !important; }
+          .print-center-page { 
+            height: 100vh; 
+            width: 100%; 
+            display: flex !important; 
+            flex-direction: column !important; 
+            justify-content: center !important; 
+            align-items: center !important; 
+            page-break-after: always !important; 
+            page-break-inside: avoid !important; 
+            box-sizing: border-box; 
+          }
+          .print-content-wrapper { width: 100% !important; max-width: 277mm !important; box-sizing: border-box !important; }
           .whitespace-pre-wrap { white-space: pre-wrap !important; word-break: break-word !important; }
           select { display: none !important; }
+
+          .pdf-cover-grid { 
+            display: grid !important; 
+            grid-template-columns: 1fr 1fr !important; 
+            gap: 24px !important; 
+            width: 100% !important; 
+            margin-bottom: 20px !important;
+          }
+          .pdf-item-container { 
+            display: flex !important; 
+            flex-direction: row !important; 
+            width: 100% !important; 
+            height: 185mm !important; 
+          }
+          .pdf-item-left { 
+            display: flex !important; 
+            flex-direction: column !important; 
+            width: 70% !important; 
+            flex: 0 0 70% !important; 
+            height: 100% !important; 
+          }
+          .pdf-item-right { 
+            display: flex !important; 
+            flex-direction: column !important; 
+            width: 30% !important; 
+            flex: 0 0 30% !important; 
+            height: 100% !important; 
+          }
           
           /* Custom CSS rules to perfectly contain the image and prevent cutoff/overflow in print/PDF */
           .print-fit-container-fit {
@@ -875,41 +1126,54 @@ const App: React.FC = () => {
         }
 
         /* Direct PDF Download Capture Styles (exact matching minimal margins as print preview) */
-        body.pdf-exporting {
+        body.pdf-exporting,
+        .pdf-exporting {
           overflow-x: hidden !important;
           width: 100% !important;
           min-width: 1122.5px !important;
           -webkit-text-size-adjust: 100% !important;
           text-size-adjust: 100% !important;
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
         }
-        body.pdf-exporting .no-print {
+        body.pdf-exporting .no-print,
+        .pdf-exporting .no-print {
           display: none !important;
         }
-        body.pdf-exporting .pdf-progress-modal {
+        body.pdf-exporting .pdf-progress-modal,
+        .pdf-exporting .pdf-progress-modal {
           display: flex !important;
         }
         body.pdf-exporting .print-hidden,
         body.pdf-exporting .print\:hidden,
         body.pdf-exporting .cursor-context-menu,
-        body.pdf-exporting .cursor-move {
+        body.pdf-exporting .cursor-move,
+        .pdf-exporting .print-hidden,
+        .pdf-exporting .cursor-context-menu,
+        .pdf-exporting .cursor-move {
           display: none !important;
         }
-        body.pdf-exporting .print-block {
+        body.pdf-exporting .print-block,
+        .pdf-exporting .print-block {
           display: block !important;
         }
-        body.pdf-exporting .print-flex {
+        body.pdf-exporting .print-flex,
+        .pdf-exporting .print-flex {
           display: flex !important;
         }
-        body.pdf-exporting select {
+        body.pdf-exporting select,
+        .pdf-exporting select {
           display: none !important;
         }
-        body.pdf-exporting .avoid-break {
+        body.pdf-exporting .avoid-break,
+        .pdf-exporting .avoid-break {
           page-break-inside: avoid !important;
         }
-        body.pdf-exporting .print-center-page[data-hidden-export="true"] {
+        body.pdf-exporting .print-center-page[data-hidden-export="true"],
+        .pdf-exporting .print-center-page[data-hidden-export="true"] {
           display: none !important;
         }
-        body.pdf-exporting #print-root-container {
+        body.pdf-exporting #print-root-container,
+        .pdf-exporting #print-root-container {
           width: 1122.5px !important;
           max-width: 1122.5px !important;
           min-width: 1122.5px !important;
@@ -919,7 +1183,8 @@ const App: React.FC = () => {
           background: white !important;
           box-sizing: border-box !important;
         }
-        body.pdf-exporting .print-center-page {
+        body.pdf-exporting .print-center-page,
+        .pdf-exporting .print-center-page {
           width: 1122.5px !important;
           height: 793.7px !important;
           min-width: 1122.5px !important;
@@ -927,7 +1192,7 @@ const App: React.FC = () => {
           min-height: 793.7px !important;
           max-height: 793.7px !important;
           padding: 37.8px !important;
-          margin: 0 !important;
+          margin: 0 auto !important;
           background: #ffffff !important;
           box-sizing: border-box !important;
           display: flex !important;
@@ -936,58 +1201,93 @@ const App: React.FC = () => {
           align-items: center !important;
           overflow: hidden !important;
         }
-        body.pdf-exporting .print-content-wrapper {
-          width: 1046.9px !important;
-          max-width: 1046.9px !important;
-          min-width: 1046.9px !important;
+        body.pdf-exporting .print-content-wrapper,
+        .pdf-exporting .print-content-wrapper {
+          width: 1044px !important;
+          max-width: 1044px !important;
+          min-width: 1044px !important;
           box-sizing: border-box !important;
         }
-        body.pdf-exporting .pdf-item-container {
+        body.pdf-exporting .print-cover-wrapper,
+        .pdf-exporting .print-cover-wrapper {
+          border: none !important;
+          box-shadow: none !important;
+        }
+        body.pdf-exporting .print-item-wrapper,
+        .pdf-exporting .print-item-wrapper {
+          border-width: 2px !important;
+          border-style: solid !important;
+          border-color: #1f2937 !important;
+          border-radius: 6px !important;
+          overflow: hidden !important;
+        }
+        body.pdf-exporting .pdf-cover-grid,
+        .pdf-exporting .pdf-cover-grid {
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+          gap: 24px !important;
+          width: 100% !important;
+          margin-bottom: 20px !important;
+        }
+        body.pdf-exporting .pdf-item-container,
+        .pdf-exporting .pdf-item-container {
           display: flex !important;
           flex-direction: row !important;
           width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
           height: 699.2px !important;
           max-height: 699.2px !important;
+          min-height: 699.2px !important;
           border: 0 !important;
-          margin-top: 0 !important;
+          margin: 0 !important;
           box-sizing: border-box !important;
+          overflow: hidden !important;
         }
-        body.pdf-exporting .pdf-item-left {
+        body.pdf-exporting .pdf-item-left,
+        .pdf-exporting .pdf-item-left {
           display: flex !important;
           flex-direction: column !important;
-          width: 732.8px !important;
-          max-width: 732.8px !important;
-          min-width: 732.8px !important;
-          flex: 0 0 732.8px !important;
+          width: 70% !important;
+          max-width: 70% !important;
+          min-width: 70% !important;
+          flex: 0 0 70% !important;
           height: 699.2px !important;
           max-height: 699.2px !important;
           min-height: 699.2px !important;
           border-right: 0 !important;
           border-bottom: 0 !important;
           box-sizing: border-box !important;
+          overflow: hidden !important;
         }
-        body.pdf-exporting .pdf-item-right {
+        body.pdf-exporting .pdf-item-right,
+        .pdf-exporting .pdf-item-right {
           display: flex !important;
           flex-direction: column !important;
-          width: 314px !important;
-          max-width: 314px !important;
-          min-width: 314px !important;
-          flex: 0 0 314px !important;
+          width: 30% !important;
+          max-width: 30% !important;
+          min-width: 30% !important;
+          flex: 0 0 30% !important;
           height: 699.2px !important;
           max-height: 699.2px !important;
           min-height: 699.2px !important;
           overflow: hidden !important;
           justify-content: flex-start !important;
           box-sizing: border-box !important;
+          border: 0 !important;
         }
-        body.pdf-exporting .pdf-sample-row {
+        body.pdf-exporting .pdf-sample-row,
+        .pdf-exporting .pdf-sample-row {
           height: 209.7px !important;
           max-height: 209.7px !important;
           min-height: 209.7px !important;
           flex: 0 0 209.7px !important;
           box-sizing: border-box !important;
+          display: flex !important;
+          width: 100% !important;
         }
-        body.pdf-exporting .pdf-sample-grid {
+        body.pdf-exporting .pdf-sample-grid,
+        .pdf-exporting .pdf-sample-grid {
           gap: 16px !important;
           display: grid !important;
           grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
@@ -1049,7 +1349,7 @@ const App: React.FC = () => {
 
       <div id="print-root-container" className="max-w-[1200px] mx-auto bg-white shadow-lg p-4 md:p-8 rounded-sm relative z-0 print:shadow-none print:p-0 print:bg-transparent w-full print:max-w-none">
         <div className="print-center-page w-full">
-          <div className="print-content-wrapper w-full">
+          <div className="print-content-wrapper print-cover-wrapper w-full">
             
             {/* ========================================================================= */}
             {/* WEB EDITOR VIEW (หน้าสำหรับกรอกและแก้ไขข้อมูลบนเว็บ) */}
@@ -1149,18 +1449,18 @@ const App: React.FC = () => {
               {/* Header: Left Logo, Right Title */}
               <div className="mb-6 border-b-2 border-gray-800 pb-3 flex justify-between items-center w-full">
                 <div className="text-left flex items-center">
-                  <img src={logoSrc} alt="Logo" className="h-14 lg:h-16 object-contain" style={logoSrc.startsWith('data:') ? {} : { mixBlendMode: 'multiply', filter: 'contrast(1.1) brightness(1.1)' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                  <img src={getCachedDataUrl(logoSrc) || logoSrc} alt="Logo" className="h-14 lg:h-16 object-contain" style={logoSrc.startsWith('data:') ? {} : { mixBlendMode: 'multiply', filter: 'contrast(1.1) brightness(1.1)' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
                 </div>
                 <h1 className="text-2xl font-bold text-gray-800 text-right tracking-wide">ใบสรุปงานติดตั้งผ้าม่าน</h1>
               </div>
 
               {/* Two columns: ส่วนผู้จัดทำ & ส่วนลูกค้า */}
-              <div className="grid grid-cols-2 gap-6 mb-5 text-sm w-full">
+              <div className="pdf-cover-grid grid grid-cols-2 gap-6 mb-5 text-sm w-full" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', width: '100%', marginBottom: '20px' }}>
                 
                 {/* ส่วนผู้จัดทำ */}
-                <div className="p-4 border border-gray-300 rounded-md bg-white flex flex-col justify-between">
+                <div className="p-4 border border-gray-300 rounded-md bg-white flex flex-col justify-between" style={{ border: '1px solid #d1d5db', borderRadius: '6px', padding: '16px', backgroundColor: '#ffffff', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
-                    <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 text-base text-gray-800">ส่วนผู้จัดทำ</h2>
+                    <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 text-base text-gray-800" style={{ borderBottom: '1px solid #d1d5db' }}>ส่วนผู้จัดทำ</h2>
                     <div className="space-y-2.5 text-xs text-gray-800">
                       <div className="flex items-baseline">
                         <span className="w-36 font-bold text-gray-800 shrink-0">วันที่วัดพื้นที่ :</span>
@@ -1178,7 +1478,7 @@ const App: React.FC = () => {
                       </div>
                       <div className="flex flex-col pt-1">
                         <span className="font-bold text-gray-800 mb-1">สถานที่ติดตั้ง :</span>
-                        <div className="w-full text-[13.5px] font-bold leading-normal whitespace-pre-wrap text-black border-b border-gray-300 pb-1 min-h-[36px]">
+                        <div className="w-full text-[13.5px] font-bold leading-normal whitespace-pre-wrap text-black border-b border-gray-300 pb-1 min-h-[36px]" style={{ borderBottom: '1px solid #d1d5db' }}>
                           {generalInfo.location || '-'}
                         </div>
                       </div>
@@ -1189,21 +1489,21 @@ const App: React.FC = () => {
                   <div className="mt-8 flex flex-col items-center justify-end h-24">
                     {generalInfo.creatorSignature && (
                       <div className="h-12 w-full flex justify-center items-end mb-1">
-                        <img src={optImg(generalInfo.creatorSignature, 300)} className="max-h-full object-contain mix-blend-multiply" alt="signature" crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                        <img src={getCachedDataUrl(optImg(generalInfo.creatorSignature, 300)) || optImg(generalInfo.creatorSignature, 300)} className="max-h-full object-contain mix-blend-multiply" alt="signature" crossOrigin="anonymous" referrerPolicy="no-referrer" />
                       </div>
                     )}
                     <div className="w-52 text-center text-[15px] font-bold text-black pb-0.5">
                       {displayCreatorName || ''}
                     </div>
-                    <div className="w-52 border-b border-gray-400 mb-1"></div>
+                    <div className="w-52 border-b border-gray-400 mb-1" style={{ borderBottom: '1px solid #9ca3af' }}></div>
                     <p className="text-gray-700 text-sm font-bold">ผู้จัดทำ/เจ้าของงาน</p>
                   </div>
                 </div>
 
                 {/* ส่วนลูกค้า */}
-                <div className="p-4 border border-gray-300 rounded-md bg-white flex flex-col justify-between">
+                <div className="p-4 border border-gray-300 rounded-md bg-white flex flex-col justify-between" style={{ border: '1px solid #d1d5db', borderRadius: '6px', padding: '16px', backgroundColor: '#ffffff', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
-                    <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 text-base text-gray-800">ส่วนลูกค้า</h2>
+                    <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 text-base text-gray-800" style={{ borderBottom: '1px solid #d1d5db' }}>ส่วนลูกค้า</h2>
                     <div className="space-y-2.5 text-xs text-gray-800">
                       <div className="flex items-baseline">
                         <span className="w-32 font-bold text-gray-800 shrink-0">ชื่อ-นามสกุล :</span>
@@ -1227,7 +1527,7 @@ const App: React.FC = () => {
                   {/* Customer Signature */}
                   <div className="mt-8 flex flex-col items-center justify-end h-24">
                     <div className="h-12 w-full"></div>
-                    <div className="w-52 border-b border-gray-400 mb-1"></div>
+                    <div className="w-52 border-b border-gray-400 mb-1" style={{ borderBottom: '1px solid #9ca3af' }}></div>
                     <p className="text-gray-700 text-sm font-bold">ผู้สั่งซื้อ</p>
                   </div>
                 </div>
@@ -1235,7 +1535,7 @@ const App: React.FC = () => {
               </div>
 
               {/* หมายเหตุเงื่อนไข */}
-              <div className="mb-4 bg-red-50/50 p-3 rounded border border-red-200">
+              <div className="mb-4 bg-red-50/50 p-3 rounded border border-red-200" style={{ border: '1px solid #fecaca', borderRadius: '6px', padding: '12px', backgroundColor: 'rgba(254, 242, 242, 0.5)' }}>
                 <h3 className="font-bold text-red-600 mb-2 text-sm underline">หมายเหตุเงื่อนไข :</h3>
                 <div className="w-full text-[12.5px] text-gray-800 leading-relaxed whitespace-pre-wrap font-medium">
                   {generalInfo.terms}
@@ -1466,7 +1766,10 @@ const App: React.FC = () => {
 
             return (
               <div key={item.id} className={`print-center-page w-full relative mb-10 print:mb-0 ${isHidden ? 'print:hidden' : ''}`} data-hidden-export={isHidden ? 'true' : 'false'}>
-                <div className={`print-content-wrapper w-full border-2 p-1 relative rounded bg-white hover:z-50 transition-all duration-300 shadow-sm hover:shadow-md ${isHidden ? 'border-amber-400 ring-2 ring-amber-200' : 'border-gray-800'}`}>
+                <div 
+                  className={`print-content-wrapper print-item-wrapper w-full border-2 p-1 relative rounded bg-white hover:z-50 transition-all duration-300 shadow-sm hover:shadow-md ${isHidden ? 'border-amber-400 ring-2 ring-amber-200' : 'border-gray-800'}`}
+                  style={{ boxSizing: 'border-box' }}
+                >
                   <div className={`absolute top-0 left-0 text-white px-4 py-1.5 text-sm font-bold z-10 rounded-br flex items-center gap-2 ${isHidden ? 'bg-amber-600' : 'bg-gray-800'}`}>
                     <span>รายการที่ {index + 1}</span>
                     {isHidden && (
@@ -1490,7 +1793,10 @@ const App: React.FC = () => {
                     <button onClick={() => removeItem(item.id)} className="bg-red-500 text-white rounded-full p-2 hover:bg-red-600 shadow-md transition-transform hover:scale-110" title="ลบ"><Trash2 size={16} /></button>
                   </div>
 
-                  <div className={`pdf-item-container border border-gray-300 print:border-0 flex flex-col lg:flex-row print:flex-row h-auto lg:h-[750px] print:h-[185mm] mt-8 md:mt-0 bg-white relative overflow-hidden w-full box-border ${isHidden ? 'opacity-90' : ''}`}>
+                  <div 
+                    className={`pdf-item-container border border-gray-300 print:border-0 flex flex-col lg:flex-row print:flex-row h-auto lg:h-[750px] print:h-[185mm] mt-8 md:mt-0 bg-white relative overflow-hidden w-full box-border ${isHidden ? 'opacity-90' : ''}`}
+                    style={{ boxSizing: 'border-box', width: '100%', maxWidth: '100%' }}
+                  >
                     {/* Watermark overlay when item is hidden from export (no-print so it never appears if printed) */}
                     {isHidden && (
                       <div className="no-print absolute inset-0 z-40 pointer-events-none flex items-center justify-center bg-amber-500/10 backdrop-blur-[0.5px]">
@@ -1665,7 +1971,7 @@ const App: React.FC = () => {
                       {/* ========================================================================= */}
                       <div className="hidden print-flex flex-col w-full h-full p-2 bg-white box-border overflow-hidden gap-2.5">
                         {/* Card 1: รายละเอียดการติดตั้งผ้าม่าน */}
-                        <div className="border border-gray-400 rounded-lg overflow-hidden bg-white shadow-none w-full flex flex-col shrink-0 divide-y divide-gray-300">
+                        <div className="border border-gray-400 rounded-lg overflow-hidden bg-white shadow-none w-full flex flex-col shrink-0 divide-y divide-gray-300" style={{ border: '1px solid #9ca3af', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#ffffff', width: '100%' }}>
                           {/* Header banner */}
                           <div 
                             style={{ backgroundColor: pdfTheme.mainHeaderBg, color: pdfTheme.mainHeaderText }}
@@ -1796,7 +2102,7 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Card 2: หมายเหตุ (ขอบมน แยกจากรายละเอียดการติดตั้ง และยืดหยุ่นเต็มพื้นที่ที่เหลือ) */}
-                        <div className="border border-gray-400 rounded-lg overflow-hidden bg-white shadow-none w-full flex flex-col flex-1 min-h-[60px]">
+                        <div className="border border-gray-400 rounded-lg overflow-hidden bg-white shadow-none w-full flex flex-col flex-1 min-h-[60px]" style={{ border: '1px solid #9ca3af', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#ffffff', width: '100%' }}>
                           <div 
                             style={{ backgroundColor: pdfTheme.mainHeaderBg, color: pdfTheme.mainHeaderText }}
                             className="text-center font-bold py-1.5 px-3 text-[13.5px] tracking-wide shrink-0"

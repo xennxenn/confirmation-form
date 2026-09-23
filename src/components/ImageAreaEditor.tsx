@@ -443,7 +443,7 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
               >
                 <img 
                     ref={imgRef}
-                    src={optImg(item.image, 1600)} 
+                    src={getCachedDataUrl(optImg(item.image, 1600)) || getCachedDataUrl(item.image) || optImg(item.image, 1600)} 
                     alt="Window view" 
                     style={{ width: '100%', height: '100%', display: 'block', objectFit: 'fill' }}
                     className="absolute inset-0 pointer-events-none" 
