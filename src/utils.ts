@@ -10,15 +10,19 @@ export const getCachedDataUrl = (url: string | null | undefined): string | null 
   return dataUrlCache.get(url) || null;
 };
 
-export const preloadImageDataUrl = async (url: string | null | undefined): Promise<string> => {
+export const preloadImageDataUrl = async (url: string | null | undefined, timeoutMs: number = 2200): Promise<string> => {
   if (!url) return '';
   if (url.startsWith('data:')) return url;
   if (dataUrlCache.has(url)) return dataUrlCache.get(url)!;
   if (pendingFetches.has(url)) return pendingFetches.get(url)!;
 
   const fetchPromise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, { credentials: 'omit', mode: 'cors' });
+      const response = await fetch(url, { credentials: 'omit', mode: 'cors', signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!response.ok) return url;
       const blob = await response.blob();
       return await new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -31,7 +35,8 @@ export const preloadImageDataUrl = async (url: string | null | undefined): Promi
         reader.readAsDataURL(blob);
       });
     } catch (err) {
-      // If CORS or network fails, fallback to original URL
+      clearTimeout(timeoutId);
+      // If CORS, timeout, or network fails, fallback immediately to original URL
       return url;
     } finally {
       pendingFetches.delete(url);

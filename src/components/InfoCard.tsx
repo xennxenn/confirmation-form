@@ -1,6 +1,6 @@
 import React from 'react';
 import { AutoFitText } from './AutoFitText';
-import { optImg } from '../utils';
+import { optImg, getCachedDataUrl } from '../utils';
 
 interface InfoCardProps {
   title: string;
@@ -77,17 +77,21 @@ export const InfoCard: React.FC<InfoCardProps> = React.memo(({
           <div className="flex w-full h-full">
             {/* Left Box (Blinds Fabric) */}
             <div className="w-1/2 h-full border-r border-gray-200 relative flex items-center justify-center overflow-hidden bg-gray-50">
-              {imgUrl ? (
-                <img src={optImg(imgUrl, 400)} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
-              ) : (
+              {imgUrl ? (() => {
+                const opt = optImg(imgUrl, 400);
+                const src = getCachedDataUrl(opt) || opt;
+                return <img src={src} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />;
+              })() : (
                 <span className="text-[10px] text-gray-400 font-bold">มู่ลี่</span>
               )}
             </div>
             {/* Right Box (Tape Fabric or Color) */}
             <div className="w-1/2 h-full relative flex items-center justify-center overflow-hidden" style={{ backgroundColor: color2 || '#F3F4F6' }}>
-              {imgUrl2 ? (
-                <img src={optImg(imgUrl2, 400)} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
-              ) : color2 ? (
+              {imgUrl2 ? (() => {
+                const opt2 = optImg(imgUrl2, 400);
+                const src2 = getCachedDataUrl(opt2) || opt2;
+                return <img src={src2} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />;
+              })() : color2 ? (
                 <div className="absolute inset-0 flex items-center justify-center text-[9px] text-white font-bold bg-opacity-30 bg-black">
                   {text2 || 'เทป'}
                 </div>
@@ -96,9 +100,11 @@ export const InfoCard: React.FC<InfoCardProps> = React.memo(({
               )}
             </div>
           </div>
-        ) : imgUrl ? (
-          <img src={optImg(imgUrl, 400)} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />
-        ) : (
+        ) : imgUrl ? (() => {
+          const opt = optImg(imgUrl, 400);
+          const src = getCachedDataUrl(opt) || opt;
+          return <img src={src} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />;
+        })() : (
           renderFallback()
         )}
       </div>

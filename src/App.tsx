@@ -412,10 +412,31 @@ const App: React.FC = () => {
       const totalPages = pageElements.length;
       setPdfExportProgress({ current: 0, total: totalPages, percent: 5, message: 'กำลังตรวจสอบและเตรียมมาสก์รูปภาพ...', active: true });
 
-      // Step 1: Preload all masks and item images across items to guarantee they render in PDF
+      // Step 1: Preload all masks, fabrics, style icons, and sample images in parallel with strict timeout
       const urlsToPreload = new Set<string>();
       items.filter(it => !it.hiddenInExport).forEach(it => {
         if (it.image) urlsToPreload.add(it.image);
+
+        const primaryArea = it.areas?.[0] || {};
+        const sMain1 = primaryArea.styleMain1 || it.styleMain1 || it.styleMain || '';
+        if (sMain1 && appDB?.styleImages?.[sMain1]) {
+          urlsToPreload.add(optImg(appDB.styleImages[sMain1], 400));
+        }
+
+        const bottomMargin = (it.marginBottom === 'ระบุเอง...' || it.marginBottom === 'ระบุเอง')
+          ? (it.customMarginBottom ? String(it.customMarginBottom).trim() : 'ระบุเอง')
+          : (it.marginBottom ? String(it.marginBottom).trim() : '');
+        const searchMargin = bottomMargin || it.marginBottom || '';
+        if (searchMargin && searchMargin !== '-' && appDB?.marginImages) {
+          const mImg = appDB.marginImages[searchMargin] || Object.entries(appDB.marginImages).find(([k]) =>
+            searchMargin.includes(k) || k.includes(searchMargin) ||
+            (searchMargin.includes('ลอย') && k.includes('ลอย')) ||
+            (searchMargin.includes('พื้น') && k.includes('พื้น')) ||
+            (searchMargin.includes('บัว') && k.includes('บัว'))
+          )?.[1];
+          if (mImg) urlsToPreload.add(optImg(mImg, 400));
+        }
+
         (it.areas || []).forEach(ar => {
           const style = ar.styleMain1 || it.styleMain1 || '';
           const action = ar.styleAction1 || it.styleAction1 || it.styleAction || '';
@@ -427,24 +448,37 @@ const App: React.FC = () => {
           if (mImg && typeof mImg === 'string') urlsToPreload.add(optImg(mImg, 1200, true));
           if (masksObj['รวบซ้าย']) urlsToPreload.add(optImg(masksObj['รวบซ้าย'], 1200, true));
           if (masksObj['รวบขวา']) urlsToPreload.add(optImg(masksObj['รวบขวา'], 1200, true));
+
+          (ar.fabrics || []).forEach((fab: any) => {
+            let fImg = null;
+            if (fab.image) fImg = fab.image;
+            else if (fab.mainType === 'ผ้านอกระบบ (เฉพาะงานนี้)' && generalInfo) {
+              fImg = (generalInfo.customFabrics || []).find((f: any) => f.subType === fab.subType && f.name === fab.name && f.color === fab.color)?.image;
+            } else if (appDB?.curtainTypes) {
+              fImg = appDB.curtainTypes[fab.mainType]?.[fab.subType]?.[fab.name]?.[fab.color];
+            }
+            if (fImg) {
+              urlsToPreload.add(optImg(fImg, 400));
+              urlsToPreload.add(optImg(fImg, 300));
+            }
+          });
         });
       });
 
       if (urlsToPreload.size > 0) {
         let loadedCount = 0;
         const totalUrls = urlsToPreload.size;
-        await Promise.all(
-          Array.from(urlsToPreload).map(async (u) => {
-            try {
-              await preloadImageDataUrl(u);
-            } catch (e) {
-              // ignore single load error
-            }
-            loadedCount++;
-            const pct = Math.round(5 + (loadedCount / totalUrls) * 10);
-            setPdfExportProgress(prev => prev ? ({ ...prev, percent: pct, message: `กำลังโหลดมาสก์ (${loadedCount}/${totalUrls})...` }) : null);
-          })
-        );
+        const preloadPromises = Array.from(urlsToPreload).map(async (u) => {
+          try {
+            await preloadImageDataUrl(u, 2200);
+          } catch (e) {
+            // continue on single image timeout or CORS
+          }
+          loadedCount++;
+          const pct = Math.round(5 + (loadedCount / totalUrls) * 11);
+          setPdfExportProgress(prev => prev ? ({ ...prev, percent: pct, message: `กำลังเตรียมข้อมูลรูปภาพ (${loadedCount}/${totalUrls})...` }) : null);
+        });
+        await Promise.all(preloadPromises);
       }
 
       setPdfExportProgress({ current: 0, total: totalPages, percent: 16, message: 'กำลังจัดเค้าโครงเอกสาร PDF แนวนอน A4...', active: true });
@@ -455,7 +489,10 @@ const App: React.FC = () => {
 
       document.body.classList.add('pdf-exporting');
 
-      // Allow CSS reflow to complete
+      // Trigger resize event so any components (like ImageAreaEditor or AutoFitText) recalibrate to exact 1122.5px
+      window.dispatchEvent(new Event('resize'));
+
+      // Allow CSS reflow and layout stabilization to complete
       await new Promise(resolve => setTimeout(resolve, 350));
 
       const pdf = new jsPDF({
@@ -476,15 +513,29 @@ const App: React.FC = () => {
         });
         const el = pageElements[i] as HTMLElement;
 
+        // Render with hardware-accelerated rasterization, skipping hidden/non-print elements
         const canvas = await html2canvas(el, {
-          scale: 1.8,
+          scale: 1.5,
           useCORS: true,
           allowTaint: false,
           backgroundColor: '#ffffff',
           logging: false,
-          windowWidth: 1200,
+          windowWidth: 1122.5,
+          width: 1122.5,
+          height: 793.7,
           scrollX: 0,
           scrollY: 0,
+          ignoreElements: (element) => {
+            if (!element) return false;
+            const cl = element.classList;
+            if (!cl) return false;
+            return (
+              cl.contains('no-print') ||
+              cl.contains('cursor-context-menu') ||
+              cl.contains('cursor-move') ||
+              cl.contains('pdf-progress-modal')
+            );
+          },
         });
 
         // 0.82 JPEG quality keeps file size lightweight while maintaining crisp sharpness
@@ -552,6 +603,7 @@ const App: React.FC = () => {
       });
 
       document.body.classList.remove('pdf-exporting');
+      window.dispatchEvent(new Event('resize'));
       window.scrollTo(prevScrollX, prevScrollY);
 
       // Keep progress dialog visible for 1.5 seconds at 100% so user sees completion clearly
@@ -561,6 +613,7 @@ const App: React.FC = () => {
     } catch (err: any) {
       console.error('PDF Generation Error:', err);
       document.body.classList.remove('pdf-exporting');
+      window.dispatchEvent(new Event('resize'));
       window.scrollTo(prevScrollX, prevScrollY);
       setPdfExportProgress(null);
       setDialog({
@@ -824,6 +877,10 @@ const App: React.FC = () => {
         /* Direct PDF Download Capture Styles (exact matching minimal margins as print preview) */
         body.pdf-exporting {
           overflow-x: hidden !important;
+          width: 100% !important;
+          min-width: 1122.5px !important;
+          -webkit-text-size-adjust: 100% !important;
+          text-size-adjust: 100% !important;
         }
         body.pdf-exporting .no-print {
           display: none !important;
@@ -831,7 +888,10 @@ const App: React.FC = () => {
         body.pdf-exporting .pdf-progress-modal {
           display: flex !important;
         }
-        body.pdf-exporting .print-hidden {
+        body.pdf-exporting .print-hidden,
+        body.pdf-exporting .print\:hidden,
+        body.pdf-exporting .cursor-context-menu,
+        body.pdf-exporting .cursor-move {
           display: none !important;
         }
         body.pdf-exporting .print-block {
@@ -857,6 +917,7 @@ const App: React.FC = () => {
           margin: 0 auto !important;
           box-shadow: none !important;
           background: white !important;
+          box-sizing: border-box !important;
         }
         body.pdf-exporting .print-center-page {
           width: 1122.5px !important;
@@ -878,33 +939,60 @@ const App: React.FC = () => {
         body.pdf-exporting .print-content-wrapper {
           width: 1046.9px !important;
           max-width: 1046.9px !important;
+          min-width: 1046.9px !important;
           box-sizing: border-box !important;
         }
         body.pdf-exporting .pdf-item-container {
           display: flex !important;
           flex-direction: row !important;
+          width: 100% !important;
           height: 699.2px !important;
           max-height: 699.2px !important;
           border: 0 !important;
           margin-top: 0 !important;
+          box-sizing: border-box !important;
         }
         body.pdf-exporting .pdf-item-left {
-          width: 70% !important;
-          height: 100% !important;
+          display: flex !important;
+          flex-direction: column !important;
+          width: 732.8px !important;
+          max-width: 732.8px !important;
+          min-width: 732.8px !important;
+          flex: 0 0 732.8px !important;
+          height: 699.2px !important;
+          max-height: 699.2px !important;
+          min-height: 699.2px !important;
           border-right: 0 !important;
           border-bottom: 0 !important;
+          box-sizing: border-box !important;
         }
         body.pdf-exporting .pdf-item-right {
-          width: 30% !important;
+          display: flex !important;
+          flex-direction: column !important;
+          width: 314px !important;
+          max-width: 314px !important;
+          min-width: 314px !important;
+          flex: 0 0 314px !important;
           height: 699.2px !important;
+          max-height: 699.2px !important;
+          min-height: 699.2px !important;
           overflow: hidden !important;
           justify-content: flex-start !important;
+          box-sizing: border-box !important;
         }
         body.pdf-exporting .pdf-sample-row {
-          height: 30% !important;
+          height: 209.7px !important;
+          max-height: 209.7px !important;
+          min-height: 209.7px !important;
+          flex: 0 0 209.7px !important;
+          box-sizing: border-box !important;
         }
         body.pdf-exporting .pdf-sample-grid {
           gap: 16px !important;
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          width: 100% !important;
+          height: 100% !important;
         }
         body.pdf-exporting .print-fit-container-fit {
           width: auto !important;
@@ -962,96 +1050,200 @@ const App: React.FC = () => {
       <div id="print-root-container" className="max-w-[1200px] mx-auto bg-white shadow-lg p-4 md:p-8 rounded-sm relative z-0 print:shadow-none print:p-0 print:bg-transparent w-full print:max-w-none">
         <div className="print-center-page w-full">
           <div className="print-content-wrapper w-full">
-            <div className="mb-6 border-b-2 border-gray-800 pb-3 flex justify-between items-center avoid-break relative">
-              <button 
-                onClick={async () => {
-                  if (saving) return;
-                  await saveData();
-                  setView('dashboard');
-                }} 
-                disabled={saving}
-                className={`absolute -left-12 md:-left-20 top-1/2 transform -translate-y-1/2 no-print p-2 rounded-full shadow-md transition-colors z-10 ${saving ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
-              >
-                <ArrowLeft size={24}/>
-              </button>
-              <div className="w-1/3 text-left flex items-center gap-4">
-                <img src={logoSrc} alt="Logo" className="h-10 md:h-14 lg:h-16 object-contain" style={logoSrc.startsWith('data:') ? {} : { mixBlendMode: 'multiply', filter: 'contrast(1.1) brightness(1.1)' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
-                <div className="no-print">
-                  {appUser.role === 'admin' && <button onClick={()=>setShowDBSettings(true)} className="bg-gray-700 text-white px-3 py-2 rounded flex items-center hover:bg-gray-800 text-xs shadow font-bold transition-all w-fit h-9"><Settings size={16} className="mr-1.5"/> <span className="hidden md:inline">ฐานข้อมูล</span></button>}
-                </div>
-              </div>
-              <h1 className="text-xl md:text-2xl font-bold text-gray-800 w-1/3 text-center">ใบสรุปงานติดตั้งผ้าม่าน</h1>
-              <div className="w-1/3 text-right no-print flex items-center justify-end gap-2">
-                <div className="text-xs text-right hidden lg:block">
-                  <p className="font-bold text-gray-800">คุณ {appUser.name || appUser.username}</p>
-                  <p className="text-gray-500 text-[10px]">{appUser.role === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : 'พนักงาน (User)'}</p>
-                </div>
+            
+            {/* ========================================================================= */}
+            {/* WEB EDITOR VIEW (หน้าสำหรับกรอกและแก้ไขข้อมูลบนเว็บ) */}
+            {/* ========================================================================= */}
+            <div className="no-print">
+              <div className="mb-6 border-b-2 border-gray-800 pb-3 flex justify-between items-center relative">
                 <button 
                   onClick={async () => {
                     if (saving) return;
                     await saveData();
-                    handleLogout();
+                    setView('dashboard');
                   }} 
                   disabled={saving}
-                  className={`border px-2 md:px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm ${saving ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200'}`}
-                  title="บันทึกและออกจากระบบ"
+                  className={`absolute -left-12 md:-left-20 top-1/2 transform -translate-y-1/2 p-2 rounded-full shadow-md transition-colors z-10 ${saving ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
                 >
-                  <LogOut size={14}/>
-                  <span className="hidden sm:inline">ออกจากระบบ</span>
+                  <ArrowLeft size={24}/>
                 </button>
+                <div className="w-1/3 text-left flex items-center gap-4">
+                  <img src={logoSrc} alt="Logo" className="h-10 md:h-14 lg:h-16 object-contain" style={logoSrc.startsWith('data:') ? {} : { mixBlendMode: 'multiply', filter: 'contrast(1.1) brightness(1.1)' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                  <div>
+                    {appUser.role === 'admin' && <button onClick={()=>setShowDBSettings(true)} className="bg-gray-700 text-white px-3 py-2 rounded flex items-center hover:bg-gray-800 text-xs shadow font-bold transition-all w-fit h-9"><Settings size={16} className="mr-1.5"/> <span className="hidden md:inline">ฐานข้อมูล</span></button>}
+                  </div>
+                </div>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-800 w-1/3 text-center">ใบสรุปงานติดตั้งผ้าม่าน</h1>
+                <div className="w-1/3 text-right flex items-center justify-end gap-2">
+                  <div className="text-xs text-right hidden lg:block">
+                    <p className="font-bold text-gray-800">คุณ {appUser.name || appUser.username}</p>
+                    <p className="text-gray-500 text-[10px]">{appUser.role === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : 'พนักงาน (User)'}</p>
+                  </div>
+                  <button 
+                    onClick={async () => {
+                      if (saving) return;
+                      await saveData();
+                      handleLogout();
+                    }} 
+                    disabled={saving}
+                    className={`border px-2 md:px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm ${saving ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200'}`}
+                    title="บันทึกและออกจากระบบ"
+                  >
+                    <LogOut size={14}/>
+                    <span className="hidden sm:inline">ออกจากระบบ</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 text-sm relative z-0">
+                <div className="p-4 border border-gray-300 rounded-md bg-gray-50">
+                  <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 inline-block text-base text-gray-800">ส่วนผู้จัดทำ</h2>
+                  <div className="space-y-2.5 text-xs">
+                    <div className="flex items-center"><span className="w-36 font-bold text-gray-700">วันที่วัดพื้นที่ :</span><input type="date" name="surveyDate" value={generalInfo.surveyDate} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 bg-transparent h-7" /></div>
+                    <div className="flex items-center"><span className="w-36 font-bold text-gray-700">วันที่คอนเฟิร์ม :</span><input type="date" name="confirmDate" value={generalInfo.confirmDate} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 bg-transparent h-7" /></div>
+                    <div className="flex items-center">
+                      <span className="w-36 font-bold text-gray-700">วันที่ติดตั้งผ้าม่าน :</span>
+                      <div className="flex-1 flex flex-wrap gap-1.5 items-center min-h-[28px] border-b border-gray-300 pb-1">
+                        {generalInfo.installDates.length > 0 ? generalInfo.installDates.map((d, i) => (<span key={i} className="bg-white px-2 py-0.5 rounded border shadow-sm flex items-center font-bold text-blue-800">{d} <X size={12} className="ml-1 cursor-pointer text-red-500 hover:bg-red-100 rounded-full" onClick={() => removeInstallDate(d)}/></span>)) : <span className="text-gray-400 italic text-[11px]">ยังไม่ได้ระบุ</span>}
+                        <div className="flex items-center ml-auto"><input type="date" value={tempInstallDate} onChange={(e)=>setTempInstallDate(e.target.value)} className="border rounded px-2 py-0.5 text-xs outline-none focus:border-blue-500 bg-white h-7"/><button onClick={addInstallDate} className="bg-blue-100 text-blue-700 p-1 rounded ml-1 hover:bg-blue-200 transition-colors h-7 w-7 flex items-center justify-center font-bold text-sm">+</button></div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col"><span className="font-bold text-gray-700">สถานที่ติดตั้ง :</span><textarea name="location" value={generalInfo.location} onChange={handleGeneralChange} rows={2} className="w-full border border-gray-300 rounded p-2 mt-1 outline-none focus:border-blue-500 resize-none bg-white text-xs font-medium"></textarea></div>
+                  </div>
+                  <div className="mt-8 flex flex-col items-center justify-end relative h-24">
+                    {generalInfo.creatorSignature && <div className="h-12 w-full flex justify-center items-end mb-1"><img src={optImg(generalInfo.creatorSignature, 300)} className="max-h-full object-contain mix-blend-multiply" alt="signature" crossOrigin="anonymous" referrerPolicy="no-referrer" /></div>}
+                    {appUser.role === 'admin' ? (
+                      <select value={generalInfo.creatorName || ''} onChange={handleCreatorChange} className="border-b border-gray-400 w-48 text-center text-[15px] font-bold text-blue-800 outline-none appearance-none bg-transparent cursor-pointer relative z-10 pb-0.5 h-8">
+                        <option value="">- ระบุผู้จัดทำ -</option>{allAccounts.map(a => <option key={a.id} value={a.name || a.username}>{a.name || a.username}</option>)}
+                      </select>
+                    ) : <div className="border-b border-gray-400 w-48 text-center text-[15px] font-bold text-blue-800 relative z-10 pb-0.5">{displayCreatorName}</div>}
+                    <p className="text-gray-600 text-sm font-bold mt-1">ผู้จัดทำ/เจ้าของงาน</p>
+                  </div>
+                </div>
+
+                <div className="p-4 border border-gray-300 rounded-md bg-blue-50/30 flex flex-col">
+                  <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 inline-block text-base text-gray-800">ส่วนลูกค้า</h2>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center"><span className="w-32 font-bold text-gray-700">ชื่อ-นามสกุล :</span><input type="text" name="customerName" value={generalInfo.customerName} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-bold text-blue-800 text-[15px] bg-transparent h-7" /></div>
+                    <div className="flex items-center"><span className="w-32 font-bold text-gray-700">เบอร์ติดต่อ :</span><input type="text" name="customerPhone" value={generalInfo.customerPhone} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7" /></div>
+                    <div className="flex items-center mt-4"><span className="w-32 font-bold text-gray-700">ผู้ติดต่อแทน :</span><input type="text" name="agentName" value={generalInfo.agentName} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7" /></div>
+                    <div className="flex items-center"><span className="w-32 font-bold text-gray-700">เบอร์ติดต่อ :</span><input type="text" name="agentPhone" value={generalInfo.agentPhone} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7" /></div>
+                  </div>
+                  <div className="mt-auto pt-8 text-center flex flex-col items-center justify-end h-24">
+                    <p className="border-b border-gray-400 w-48 mx-auto mb-1"></p>
+                    <p className="text-gray-600 text-sm font-bold">ผู้สั่งซื้อ</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-6 bg-red-50 p-3 rounded border border-red-200 relative z-0">
+                <h3 className="font-bold text-red-600 mb-2 text-sm underline">หมายเหตุเงื่อนไข :</h3>
+                <textarea name="terms" value={generalInfo.terms} onChange={handleGeneralChange} rows={5} className="w-full text-xs bg-transparent outline-none text-gray-700 leading-tight resize-none"></textarea>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 avoid-break text-sm relative z-0">
-              <div className="p-4 border border-gray-300 rounded-md bg-gray-50">
-                <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 inline-block text-base text-gray-800">ส่วนผู้จัดทำ</h2>
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex items-center"><span className="w-36 font-bold text-gray-700">วันที่วัดพื้นที่ :</span><input type="date" name="surveyDate" value={generalInfo.surveyDate} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.surveyDate || '-'}</div></div>
-                  <div className="flex items-center"><span className="w-36 font-bold text-gray-700">วันที่คอนเฟิร์ม :</span><input type="date" name="confirmDate" value={generalInfo.confirmDate} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.confirmDate || '-'}</div></div>
-                  <div className="flex items-center">
-                    <span className="w-36 font-bold text-gray-700">วันที่ติดตั้งผ้าม่าน :</span>
-                    <div className="flex-1 flex flex-wrap gap-1.5 items-center min-h-[28px] border-b border-gray-300 pb-1 print-hidden">
-                      {generalInfo.installDates.length > 0 ? generalInfo.installDates.map((d, i) => (<span key={i} className="bg-white px-2 py-0.5 rounded border shadow-sm flex items-center font-bold text-blue-800">{d} <X size={12} className="ml-1 cursor-pointer text-red-500 hover:bg-red-100 rounded-full" onClick={() => removeInstallDate(d)}/></span>)) : <span className="text-gray-400 italic text-[11px]">ยังไม่ได้ระบุ</span>}
-                      <div className="flex items-center ml-auto"><input type="date" value={tempInstallDate} onChange={(e)=>setTempInstallDate(e.target.value)} className="border rounded px-2 py-0.5 text-xs outline-none focus:border-blue-500 bg-white h-7"/><button onClick={addInstallDate} className="bg-blue-100 text-blue-700 p-1 rounded ml-1 hover:bg-blue-200 transition-colors h-7 w-7 flex items-center justify-center font-bold text-sm">+</button></div>
-                    </div>
-                    <div className="hidden print-block font-bold text-[14px] text-black flex-1">
-                      {generalInfo.installDates.length > 0 ? generalInfo.installDates.join(', ') : '-'}
+            {/* ========================================================================= */}
+            {/* PRINT & PDF EXPORT VIEW (แสดงเฉพาะตอน Print และ Download PDF ตรงตามรูปที่ 2) */}
+            {/* ========================================================================= */}
+            <div className="hidden print-block w-full">
+              {/* Header: Left Logo, Right Title */}
+              <div className="mb-6 border-b-2 border-gray-800 pb-3 flex justify-between items-center w-full">
+                <div className="text-left flex items-center">
+                  <img src={logoSrc} alt="Logo" className="h-14 lg:h-16 object-contain" style={logoSrc.startsWith('data:') ? {} : { mixBlendMode: 'multiply', filter: 'contrast(1.1) brightness(1.1)' }} crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                </div>
+                <h1 className="text-2xl font-bold text-gray-800 text-right tracking-wide">ใบสรุปงานติดตั้งผ้าม่าน</h1>
+              </div>
+
+              {/* Two columns: ส่วนผู้จัดทำ & ส่วนลูกค้า */}
+              <div className="grid grid-cols-2 gap-6 mb-5 text-sm w-full">
+                
+                {/* ส่วนผู้จัดทำ */}
+                <div className="p-4 border border-gray-300 rounded-md bg-white flex flex-col justify-between">
+                  <div>
+                    <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 text-base text-gray-800">ส่วนผู้จัดทำ</h2>
+                    <div className="space-y-2.5 text-xs text-gray-800">
+                      <div className="flex items-baseline">
+                        <span className="w-36 font-bold text-gray-800 shrink-0">วันที่วัดพื้นที่ :</span>
+                        <span className="font-bold text-[14px] text-black">{generalInfo.surveyDate || '-'}</span>
+                      </div>
+                      <div className="flex items-baseline">
+                        <span className="w-36 font-bold text-gray-800 shrink-0">วันที่คอนเฟิร์ม :</span>
+                        <span className="font-bold text-[14px] text-black">{generalInfo.confirmDate || '-'}</span>
+                      </div>
+                      <div className="flex items-baseline">
+                        <span className="w-36 font-bold text-gray-800 shrink-0">วันที่ติดตั้งผ้าม่าน :</span>
+                        <span className="font-bold text-[14px] text-black">
+                          {generalInfo.installDates.length > 0 ? generalInfo.installDates.join(', ') : '-'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col pt-1">
+                        <span className="font-bold text-gray-800 mb-1">สถานที่ติดตั้ง :</span>
+                        <div className="w-full text-[13.5px] font-bold leading-normal whitespace-pre-wrap text-black border-b border-gray-300 pb-1 min-h-[36px]">
+                          {generalInfo.location || '-'}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex flex-col"><span className="font-bold text-gray-700">สถานที่ติดตั้ง :</span><textarea name="location" value={generalInfo.location} onChange={handleGeneralChange} rows={2} className="w-full border border-gray-300 rounded p-2 mt-1 outline-none focus:border-blue-500 print-hidden resize-none bg-white text-xs font-medium"></textarea><div className="hidden print-block w-full mt-1 text-[15px] font-bold whitespace-pre-wrap text-black border-b border-gray-300 pb-1">{generalInfo.location || '-'}</div></div>
+
+                  {/* Creator Signature */}
+                  <div className="mt-8 flex flex-col items-center justify-end h-24">
+                    {generalInfo.creatorSignature && (
+                      <div className="h-12 w-full flex justify-center items-end mb-1">
+                        <img src={optImg(generalInfo.creatorSignature, 300)} className="max-h-full object-contain mix-blend-multiply" alt="signature" crossOrigin="anonymous" referrerPolicy="no-referrer" />
+                      </div>
+                    )}
+                    <div className="w-52 text-center text-[15px] font-bold text-black pb-0.5">
+                      {displayCreatorName || ''}
+                    </div>
+                    <div className="w-52 border-b border-gray-400 mb-1"></div>
+                    <p className="text-gray-700 text-sm font-bold">ผู้จัดทำ/เจ้าของงาน</p>
+                  </div>
                 </div>
-                <div className="mt-8 flex flex-col items-center justify-end relative h-24">
-                  {generalInfo.creatorSignature && <div className="h-12 w-full flex justify-center items-end mb-1"><img src={optImg(generalInfo.creatorSignature, 300)} className="max-h-full object-contain mix-blend-multiply" alt="signature" crossOrigin="anonymous" referrerPolicy="no-referrer" /></div>}
-                  {appUser.role === 'admin' ? (
-                    <select value={generalInfo.creatorName || ''} onChange={handleCreatorChange} className="border-b border-gray-400 w-48 text-center text-[15px] font-bold text-blue-800 outline-none appearance-none bg-transparent cursor-pointer print-hidden relative z-10 pb-0.5 h-8">
-                      <option value="">- ระบุผู้จัดทำ -</option>{allAccounts.map(a => <option key={a.id} value={a.name || a.username}>{a.name || a.username}</option>)}
-                    </select>
-                  ) : <div className="border-b border-gray-400 w-48 text-center text-[15px] font-bold text-blue-800 print-hidden relative z-10 pb-0.5">{displayCreatorName}</div>}
-                  <div className="hidden print-block w-48 text-center text-[15px] font-bold border-b border-gray-400 pb-0.5 text-black relative z-10">{displayCreatorName}</div>
-                  <p className="text-gray-600 text-sm font-bold mt-1">ผู้จัดทำ/เจ้าของงาน</p>
+
+                {/* ส่วนลูกค้า */}
+                <div className="p-4 border border-gray-300 rounded-md bg-white flex flex-col justify-between">
+                  <div>
+                    <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 text-base text-gray-800">ส่วนลูกค้า</h2>
+                    <div className="space-y-2.5 text-xs text-gray-800">
+                      <div className="flex items-baseline">
+                        <span className="w-32 font-bold text-gray-800 shrink-0">ชื่อ-นามสกุล :</span>
+                        <span className="font-bold text-[14px] text-black">{generalInfo.customerName || '-'}</span>
+                      </div>
+                      <div className="flex items-baseline">
+                        <span className="w-32 font-bold text-gray-800 shrink-0">เบอร์ติดต่อ :</span>
+                        <span className="font-bold text-[14px] text-black">{generalInfo.customerPhone || '-'}</span>
+                      </div>
+                      <div className="flex items-baseline pt-4">
+                        <span className="w-32 font-bold text-gray-800 shrink-0">ผู้ติดต่อแทน :</span>
+                        <span className="font-bold text-[14px] text-black">{generalInfo.agentName || '-'}</span>
+                      </div>
+                      <div className="flex items-baseline">
+                        <span className="w-32 font-bold text-gray-800 shrink-0">เบอร์ติดต่อ :</span>
+                        <span className="font-bold text-[14px] text-black">{generalInfo.agentPhone || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer Signature */}
+                  <div className="mt-8 flex flex-col items-center justify-end h-24">
+                    <div className="h-12 w-full"></div>
+                    <div className="w-52 border-b border-gray-400 mb-1"></div>
+                    <p className="text-gray-700 text-sm font-bold">ผู้สั่งซื้อ</p>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* หมายเหตุเงื่อนไข */}
+              <div className="mb-4 bg-red-50/50 p-3 rounded border border-red-200">
+                <h3 className="font-bold text-red-600 mb-2 text-sm underline">หมายเหตุเงื่อนไข :</h3>
+                <div className="w-full text-[12.5px] text-gray-800 leading-relaxed whitespace-pre-wrap font-medium">
+                  {generalInfo.terms}
                 </div>
               </div>
 
-              <div className="p-4 border border-gray-300 rounded-md bg-blue-50/30 flex flex-col">
-                <h2 className="font-bold mb-3 border-b border-gray-300 pb-1 inline-block text-base text-gray-800">ส่วนลูกค้า</h2>
-                <div className="space-y-2.5">
-                  <div className="flex items-center"><span className="w-32 font-bold text-gray-700">ชื่อ-นามสกุล :</span><input type="text" name="customerName" value={generalInfo.customerName} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-bold text-blue-800 text-[15px] print-hidden bg-transparent h-7" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.customerName || '-'}</div></div>
-                  <div className="flex items-center"><span className="w-32 font-bold text-gray-700">เบอร์ติดต่อ :</span><input type="text" name="customerPhone" value={generalInfo.customerPhone} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.customerPhone || '-'}</div></div>
-                  <div className="flex items-center mt-4"><span className="w-32 font-bold text-gray-700">ผู้ติดต่อแทน :</span><input type="text" name="agentName" value={generalInfo.agentName} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.agentName || '-'}</div></div>
-                  <div className="flex items-center"><span className="w-32 font-bold text-gray-700">เบอร์ติดต่อ :</span><input type="text" name="agentPhone" value={generalInfo.agentPhone} onChange={handleGeneralChange} className="flex-1 border-b border-gray-300 outline-none focus:border-blue-500 px-1 font-medium bg-transparent h-7 print-hidden" /><div className="hidden print-block font-bold text-[14px] text-black flex-1">{generalInfo.agentPhone || '-'}</div></div>
-                </div>
-                <div className="mt-auto pt-8 text-center flex flex-col items-center justify-end h-24">
-                  <p className="border-b border-gray-400 w-48 mx-auto mb-1"></p>
-                  <p className="text-gray-600 text-sm font-bold">ผู้สั่งซื้อ</p>
-                </div>
-              </div>
             </div>
 
-            <div className="mb-6 avoid-break bg-red-50 p-3 rounded border border-red-200 relative z-0">
-              <h3 className="font-bold text-red-600 print:text-gray-800 mb-2 text-sm print:text-[15px] underline">หมายเหตุเงื่อนไข :</h3>
-              <textarea name="terms" value={generalInfo.terms} onChange={handleGeneralChange} rows={5} className="w-full text-xs bg-transparent outline-none print-hidden text-gray-700 leading-tight resize-none"></textarea>
-              <div className="hidden print-block w-full text-[13px] text-gray-800 leading-relaxed whitespace-pre-wrap font-medium">{generalInfo.terms}</div>
-            </div>
           </div>
         </div>
 
