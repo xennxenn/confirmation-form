@@ -168,7 +168,7 @@ const App: React.FC = () => {
         if (currentState !== lastState) {
             historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
             historyRef.current.push(currentState);
-            if (historyRef.current.length > 50) historyRef.current.shift();
+            if (historyRef.current.length > 15) historyRef.current.shift();
             else historyIndexRef.current++;
             setForceUpdate(prev => !prev);
         }
@@ -472,7 +472,6 @@ const App: React.FC = () => {
         if (it.image) {
           urlsToPreload.add(it.image);
           urlsToPreload.add(optImg(it.image, 1600));
-          urlsToPreload.add(optImg(it.image, 1200));
         }
 
         const primaryArea = it.areas?.[0] || {};
@@ -517,7 +516,6 @@ const App: React.FC = () => {
             }
             if (fImg) {
               urlsToPreload.add(optImg(fImg, 400));
-              urlsToPreload.add(optImg(fImg, 300));
             }
           });
         });
@@ -528,7 +526,7 @@ const App: React.FC = () => {
         const totalUrls = urlsToPreload.size;
         const preloadPromises = Array.from(urlsToPreload).map(async (u) => {
           try {
-            await preloadImageDataUrl(u, 2200);
+            await preloadImageDataUrl(u, 1800);
           } catch (e) {
             // continue on single image timeout or CORS
           }
@@ -614,8 +612,28 @@ const App: React.FC = () => {
             clonedDoc.querySelectorAll('.print-block').forEach((node: any) => {
               node.style.setProperty('display', 'block', 'important');
             });
+            // Enforce explicit document dimensions for universal consistency across mobile and desktop
+            if (clonedDoc.documentElement) {
+              clonedDoc.documentElement.style.setProperty('width', '1122.5px', 'important');
+              clonedDoc.documentElement.style.setProperty('min-width', '1122.5px', 'important');
+              clonedDoc.documentElement.style.setProperty('max-width', '1122.5px', 'important');
+              clonedDoc.documentElement.style.setProperty('overflow', 'hidden', 'important');
+            }
+            if (clonedDoc.body) {
+              clonedDoc.body.style.setProperty('width', '1122.5px', 'important');
+              clonedDoc.body.style.setProperty('min-width', '1122.5px', 'important');
+              clonedDoc.body.style.setProperty('max-width', '1122.5px', 'important');
+              clonedDoc.body.style.setProperty('overflow', 'hidden', 'important');
+            }
+
             clonedDoc.querySelectorAll('.print-flex').forEach((node: any) => {
               node.style.setProperty('display', 'flex', 'important');
+              node.style.setProperty('flex-direction', 'column', 'important');
+              node.style.setProperty('width', '100%', 'important');
+              node.style.setProperty('height', '100%', 'important');
+              node.style.setProperty('box-sizing', 'border-box', 'important');
+              node.style.setProperty('overflow', 'hidden', 'important');
+              node.style.setProperty('gap', '10px', 'important');
             });
 
             // Enforce explicit dimensions on cloned page elements for universal consistency across all screens
@@ -694,6 +712,28 @@ const App: React.FC = () => {
               col.style.setProperty('overflow', 'hidden', 'important');
               col.style.setProperty('border', 'none', 'important');
               col.style.setProperty('box-sizing', 'border-box', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.pdf-site-photo-area').forEach((area: any) => {
+              area.style.setProperty('display', 'flex', 'important');
+              area.style.setProperty('flex-direction', 'column', 'important');
+              area.style.setProperty('width', '100%', 'important');
+              area.style.setProperty('height', '489.5px', 'important');
+              area.style.setProperty('max-height', '489.5px', 'important');
+              area.style.setProperty('min-height', '489.5px', 'important');
+              area.style.setProperty('flex', '0 0 489.5px', 'important');
+              area.style.setProperty('overflow', 'hidden', 'important');
+              area.style.setProperty('box-sizing', 'border-box', 'important');
+              area.style.setProperty('padding', '8px', 'important');
+            });
+
+            clonedDoc.querySelectorAll('.pdf-site-photo-frame').forEach((frame: any) => {
+              frame.style.setProperty('display', 'flex', 'important');
+              frame.style.setProperty('flex-direction', 'column', 'important');
+              frame.style.setProperty('width', '100%', 'important');
+              frame.style.setProperty('height', '100%', 'important');
+              frame.style.setProperty('overflow', 'hidden', 'important');
+              frame.style.setProperty('position', 'relative', 'important');
             });
 
             clonedDoc.querySelectorAll('.pdf-item-right').forEach((col: any) => {
@@ -1294,43 +1334,47 @@ const App: React.FC = () => {
           width: 100% !important;
           height: 100% !important;
         }
-        body.pdf-exporting .print-fit-container-fit {
-          width: auto !important;
-          height: auto !important;
-          max-width: 100% !important;
-          max-height: 100% !important;
-          aspect-ratio: var(--aspect-ratio) !important;
+        body.pdf-exporting .pdf-site-photo-area,
+        .pdf-exporting .pdf-site-photo-area {
+          height: 489.5px !important;
+          max-height: 489.5px !important;
+          min-height: 489.5px !important;
+          flex: 0 0 489.5px !important;
+          box-sizing: border-box !important;
+          display: flex !important;
+          flex-direction: column !important;
+          width: 100% !important;
+          overflow: hidden !important;
+          padding: 8px !important;
+        }
+        body.pdf-exporting .pdf-site-photo-frame,
+        .pdf-exporting .pdf-site-photo-frame {
+          height: 100% !important;
+          width: 100% !important;
+          display: flex !important;
+          flex-direction: column !important;
+          position: relative !important;
+          overflow: hidden !important;
+        }
+        body.pdf-exporting .print-fit-container {
           position: relative !important;
           display: block !important;
-          align-self: center !important;
-          flex-grow: 0 !important;
-          flex-shrink: 1 !important;
+          margin: auto !important;
+        }
+        body.pdf-exporting .print-fit-container-fit {
+          position: relative !important;
+          display: block !important;
+          margin: auto !important;
+          max-width: 100% !important;
+          max-height: 100% !important;
         }
         body.pdf-exporting .print-fit-container-fill {
-          width: auto !important;
-          height: auto !important;
-          min-width: 100% !important;
-          min-height: 100% !important;
-          max-width: none !important;
-          max-height: none !important;
-          aspect-ratio: var(--aspect-ratio) !important;
+          width: 100% !important;
+          height: 100% !important;
           position: relative !important;
           display: block !important;
-          align-self: center !important;
-          flex-grow: 0 !important;
-          flex-shrink: 0 !important;
         }
-        body.pdf-exporting .print-fit-container-fit img {
-          position: relative !important;
-          inset: auto !important;
-          width: auto !important;
-          height: auto !important;
-          max-width: 100% !important;
-          max-height: 100% !important;
-          object-fit: contain !important;
-          display: block !important;
-        }
-        body.pdf-exporting .print-fit-container-fill img {
+        body.pdf-exporting .print-fit-container img {
           position: absolute !important;
           inset: 0 !important;
           width: 100% !important;
@@ -1338,8 +1382,7 @@ const App: React.FC = () => {
           object-fit: fill !important;
           display: block !important;
         }
-        body.pdf-exporting .print-fit-container-fit svg,
-        body.pdf-exporting .print-fit-container-fill svg {
+        body.pdf-exporting .print-fit-container svg {
           position: absolute !important;
           inset: 0 !important;
           width: 100% !important;
@@ -1557,11 +1600,64 @@ const App: React.FC = () => {
             const styleImg1 = sMain1 && appDB.styleImages?.[sMain1];
             
             const getFabImg = (fab: any) => {
-              if(!fab) return null;
-              if(fab.mainType === 'ผ้านอกระบบ (เฉพาะงานนี้)') {
-                return (generalInfo.customFabrics || []).find((f: any) => f.subType === fab.subType && f.name === fab.name && f.color === fab.color)?.image;
+              if (!fab) return null;
+              if (fab.image) return fab.image;
+              
+              const normName = (fab.name || '').trim().toLowerCase();
+              const normColor = (fab.color || '').trim().toLowerCase();
+
+              if (fab.mainType === 'ผ้านอกระบบ (เฉพาะงานนี้)' && generalInfo?.customFabrics) {
+                const custom = (generalInfo.customFabrics || []).find((f: any) => 
+                  (f.name || '').trim().toLowerCase() === normName && 
+                  (f.color || '').trim().toLowerCase() === normColor
+                );
+                if (custom?.image) return custom.image;
               }
-              return appDB.curtainTypes[fab.mainType]?.[fab.subType]?.[fab.name]?.[fab.color];
+
+              if (appDB?.curtainTypes) {
+                // 1. Direct key match
+                const direct = appDB.curtainTypes[fab.mainType]?.[fab.subType]?.[fab.name]?.[fab.color];
+                if (direct) return direct;
+
+                // 2. Match within same mainType across all subTypes
+                if (fab.mainType && appDB.curtainTypes[fab.mainType]) {
+                  for (const sKey of Object.keys(appDB.curtainTypes[fab.mainType])) {
+                    const subObj = appDB.curtainTypes[fab.mainType][sKey];
+                    if (subObj?.[fab.name]?.[fab.color]) return subObj[fab.name][fab.color];
+                  }
+                }
+
+                // 3. Match across entire curtainTypes DB by name and color (case-insensitive)
+                if (normName && normColor) {
+                  for (const cat of Object.keys(appDB.curtainTypes)) {
+                    for (const sub of Object.keys(appDB.curtainTypes[cat] || {})) {
+                      const fMap = appDB.curtainTypes[cat][sub];
+                      if (fMap) {
+                        for (const mName of Object.keys(fMap)) {
+                          if (mName.trim().toLowerCase() === normName) {
+                            for (const cName of Object.keys(fMap[mName] || {})) {
+                              if (cName.trim().toLowerCase() === normColor) {
+                                return fMap[mName][cName];
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              // 4. Custom fabrics fallback
+              if (normName && normColor && generalInfo?.customFabrics) {
+                const custom = (generalInfo.customFabrics || []).find((f: any) => 
+                  (f.name || '').trim().toLowerCase() === normName && 
+                  (f.color || '').trim().toLowerCase() === normColor
+                );
+                if (custom?.image) return custom.image;
+              }
+
+              return null;
             };
 
             const getHexColor = (colorStr: string) => {
@@ -1810,8 +1906,8 @@ const App: React.FC = () => {
                     <div className="pdf-item-left w-full lg:w-[70%] print:w-[70%] min-h-[400px] h-[50vh] sm:h-[60vh] lg:h-full print:h-full border-b lg:border-b-0 print:border-b-0 lg:border-r print:border-r-0 border-gray-300 flex flex-col bg-white relative z-20">
                       
                       {/* Site photo area (รูปหน้างาน) with frame matching sample photo area */}
-                      <div className="flex-1 w-full border-b print:border-b-0 border-gray-300 flex flex-col relative bg-gray-50 p-2 shrink-0 overflow-hidden box-border">
-                        <div className="w-full h-full bg-white border border-gray-200 rounded shadow-sm overflow-hidden flex flex-col relative">
+                      <div className="pdf-site-photo-area flex-1 w-full border-b print:border-b-0 border-gray-300 flex flex-col relative bg-gray-50 p-2 shrink-0 overflow-hidden box-border">
+                        <div className="pdf-site-photo-frame w-full h-full bg-white border border-gray-200 rounded shadow-sm overflow-hidden flex flex-col relative">
                           <ImageAreaEditor item={item} appDB={appDB} handleItemChange={handleItemChange} setDialog={setDialog} idPrefix={`print-${index}`} generalInfo={generalInfo} itemIndex={index + 1} />
                         </div>
                       </div>

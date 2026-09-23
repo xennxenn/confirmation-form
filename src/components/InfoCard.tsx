@@ -14,6 +14,45 @@ interface InfoCardProps {
   fallbackType?: 'style' | 'fabric' | 'sheer' | 'margin';
 }
 
+const CardImage: React.FC<{
+  url: string | null | undefined;
+  fallbackText?: string;
+  renderFallback?: () => React.ReactNode;
+}> = ({ url, fallbackText, renderFallback }) => {
+  const [useRaw, setUseRaw] = React.useState(false);
+  const [loadFailed, setLoadFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setUseRaw(false);
+    setLoadFailed(false);
+  }, [url]);
+
+  if (!url || loadFailed) {
+    if (renderFallback) return <>{renderFallback()}</>;
+    return fallbackText ? <span className="text-[10px] text-gray-400 font-bold">{fallbackText}</span> : null;
+  }
+
+  const opt = optImg(url, 400);
+  const cached = getCachedDataUrl(opt) || getCachedDataUrl(url);
+  const src = cached || (useRaw ? url : opt);
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className="w-full h-full object-cover"
+      onError={() => {
+        if (!useRaw && opt !== url) {
+          // Retry with original raw URL if optimized transformation failed
+          setUseRaw(true);
+        } else {
+          setLoadFailed(true);
+        }
+      }}
+    />
+  );
+};
+
 export const InfoCard: React.FC<InfoCardProps> = React.memo(({ 
   title, 
   imgUrl, 
@@ -65,7 +104,7 @@ export const InfoCard: React.FC<InfoCardProps> = React.memo(({
           </svg>
         );
       default:
-        return <span className="text-[10px] text-gray-400">-</span>;
+        return <span className="text-[10px] text-gray-400 font-bold">-</span>;
     }
   };
 
@@ -77,21 +116,13 @@ export const InfoCard: React.FC<InfoCardProps> = React.memo(({
           <div className="flex w-full h-full">
             {/* Left Box (Blinds Fabric) */}
             <div className="w-1/2 h-full border-r border-gray-200 relative flex items-center justify-center overflow-hidden bg-gray-50">
-              {imgUrl ? (() => {
-                const opt = optImg(imgUrl, 400);
-                const src = getCachedDataUrl(opt) || opt;
-                return <img src={src} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />;
-              })() : (
-                <span className="text-[10px] text-gray-400 font-bold">มู่ลี่</span>
-              )}
+              <CardImage url={imgUrl} fallbackText="มู่ลี่" />
             </div>
             {/* Right Box (Tape Fabric or Color) */}
             <div className="w-1/2 h-full relative flex items-center justify-center overflow-hidden" style={{ backgroundColor: color2 || '#F3F4F6' }}>
-              {imgUrl2 ? (() => {
-                const opt2 = optImg(imgUrl2, 400);
-                const src2 = getCachedDataUrl(opt2) || opt2;
-                return <img src={src2} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />;
-              })() : color2 ? (
+              {imgUrl2 ? (
+                <CardImage url={imgUrl2} fallbackText="เทป" />
+              ) : color2 ? (
                 <div className="absolute inset-0 flex items-center justify-center text-[9px] text-white font-bold bg-opacity-30 bg-black">
                   {text2 || 'เทป'}
                 </div>
@@ -100,12 +131,8 @@ export const InfoCard: React.FC<InfoCardProps> = React.memo(({
               )}
             </div>
           </div>
-        ) : imgUrl ? (() => {
-          const opt = optImg(imgUrl, 400);
-          const src = getCachedDataUrl(opt) || opt;
-          return <img src={src} className="w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" />;
-        })() : (
-          renderFallback()
+        ) : (
+          <CardImage url={imgUrl} renderFallback={renderFallback} />
         )}
       </div>
       <div className="w-full flex flex-col items-center text-center">

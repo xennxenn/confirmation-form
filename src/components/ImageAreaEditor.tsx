@@ -69,10 +69,12 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
 
   useEffect(() => {
     const updateSize = () => {
-      if (!viewportRef.current || !imgNativeSize) return;
+      if (!viewportRef.current) return;
+      const effectiveSize = imgNativeSize || (item.imageWidth && item.imageHeight ? { w: item.imageWidth, h: item.imageHeight } : null);
+      if (!effectiveSize) return;
       const vw = viewportRef.current.clientWidth;
       const vh = viewportRef.current.clientHeight;
-      const { w: natW, h: natH } = imgNativeSize;
+      const { w: natW, h: natH } = effectiveSize;
       if (natW === 0 || natH === 0 || vw === 0 || vh === 0) return;
 
       const ri = natW / natH;
@@ -109,7 +111,7 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
         if (ro) ro.disconnect();
         window.removeEventListener('beforeprint', updateSize);
     };
-  }, [imgNativeSize, item.imageFit]);
+  }, [imgNativeSize, item.imageFit, item.imageWidth, item.imageHeight]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -137,6 +139,10 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
   }, [item.image]);
 
   // Preload and cache mask and fabric pattern images for this item so rendering is instantaneous and PDF generation includes them reliably
+  const stablePreloadKey = (item.areas || []).map((a: any) => 
+    `${a.styleMain1 || item.styleMain1 || ''}_${a.styleAction1 || item.styleAction1 || item.styleAction || ''}_${(a.fabrics || []).map((f: any) => `${f.mainType}_${f.subType}_${f.name}_${f.color}`).join(',')}`
+  ).join('|');
+
   useEffect(() => {
     const urlsToPreload: string[] = [];
     if (appDB?.masks) {
@@ -172,7 +178,7 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
     });
 
     urlsToPreload.forEach(u => preloadImageDataUrl(u));
-  }, [item.areas, item.styleMain1, item.styleAction1, item.styleAction, appDB, generalInfo]);
+  }, [stablePreloadKey, appDB, generalInfo]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -443,14 +449,23 @@ export const ImageAreaEditor: React.FC<ImageAreaEditorProps> = React.memo(({
               >
                 <img 
                     ref={imgRef}
-                    src={getCachedDataUrl(optImg(item.image, 1600)) || getCachedDataUrl(item.image) || optImg(item.image, 1600)} 
+                    src={getCachedDataUrl(optImg(item.image, 1600)) || getCachedDataUrl(item.image) || optImg(item.image, 1600) || item.image} 
                     alt="Window view" 
                     style={{ width: '100%', height: '100%', display: 'block', objectFit: 'fill' }}
                     className="absolute inset-0 pointer-events-none" 
                     crossOrigin="anonymous"
                     onLoad={e => {
                       const img = e.target as HTMLImageElement;
-                      setImgNativeSize({ w: img.naturalWidth, h: img.naturalHeight });
+                      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                        setImgNativeSize({ w: img.naturalWidth, h: img.naturalHeight });
+                      }
+                    }}
+                    onError={e => {
+                      const img = e.target as HTMLImageElement;
+                      if (img.crossOrigin) {
+                        img.removeAttribute('crossorigin');
+                        img.src = item.image;
+                      }
                     }}
                     referrerPolicy="no-referrer"
                 />

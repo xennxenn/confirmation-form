@@ -10,9 +10,9 @@ export const getCachedDataUrl = (url: string | null | undefined): string | null 
   return dataUrlCache.get(url) || null;
 };
 
-export const preloadImageDataUrl = async (url: string | null | undefined, timeoutMs: number = 2200): Promise<string> => {
+export const preloadImageDataUrl = async (url: string | null | undefined, timeoutMs: number = 2000): Promise<string> => {
   if (!url) return '';
-  if (url.startsWith('data:')) return url;
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
   if (dataUrlCache.has(url)) return dataUrlCache.get(url)!;
   if (pendingFetches.has(url)) return pendingFetches.get(url)!;
 
@@ -36,7 +36,6 @@ export const preloadImageDataUrl = async (url: string | null | undefined, timeou
       });
     } catch (err) {
       clearTimeout(timeoutId);
-      // If CORS, timeout, or network fails, fallback immediately to original URL
       return url;
     } finally {
       pendingFetches.delete(url);
@@ -49,25 +48,15 @@ export const preloadImageDataUrl = async (url: string | null | undefined, timeou
 
 export const optImg = (url: string | null | undefined, width?: number, forcePng?: boolean): string => {
   if (!url || typeof url !== 'string') return '';
-  if (url.startsWith('data:')) return url;
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url;
   if (!url.includes('cloudinary.com/')) return url;
   
-  // Clean up any existing auto-transformations to ensure we apply the correct format (png vs jpg)
-  let cleanUrl = url;
-  if (url.includes('/upload/')) {
-    const parts = url.split('/upload/');
-    const rightPart = parts[1];
-    if (rightPart && !rightPart.startsWith('v') && rightPart.includes('/')) {
-      const subParts = rightPart.split('/');
-      subParts.shift(); // remove transformation part
-      cleanUrl = `${parts[0]}/upload/${subParts.join('/')}`;
-    }
-  }
-
-  // Use f_png for transparent masks/icons, f_auto for optimal speed & size on sample images
   const format = forcePng ? 'f_png' : 'f_auto';
-  // Use responsive quality q_auto:good to boost load speed dramatically
-  return cleanUrl.replace('/upload/', `/upload/${format},q_auto${width ? `,w_${width}` : ''}/`);
+  const transform = `${format},q_auto${width ? `,w_${width}` : ''}`;
+
+  // Replace any existing Cloudinary transformations (e.g., f_auto,q_auto,w_400) or insert before path/version
+  // Safe regex that never removes folder names like 'curtains/' or 'fabrics/'
+  return url.replace(/\/upload\/(?:(?:[a-z]{1,4}_[^/]+,?)+\/)?/, `/upload/${transform}/`);
 };
 
 export const removeWhiteBackground = (dataUrl: string): Promise<string> => {

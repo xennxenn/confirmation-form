@@ -71,15 +71,50 @@ export const FabricSelector: React.FC<FabricSelectorProps> = React.memo(({
             <div className="w-1/2 relative">
               <input list={nameListId} value={fab.name} onChange={(e) => {
                  const val = e.target.value.toUpperCase();
+                 let newSubType = fab.subType;
                  if (isCurtain) {
                      const match = curtainModels.find(m => m.modelName === val);
-                     updateFabric(item.id, area.id, fab.id, {name: val, subType: match ? match.subType : fab.subType, color: ''});
-                 } else updateFabric(item.id, area.id, fab.id, {name: val, color: ''});
+                     if (match) newSubType = match.subType;
+                 }
+                 updateFabric(item.id, area.id, fab.id, {name: val, subType: newSubType, color: '', image: ''});
               }} className="w-full border-b border-gray-300 outline-none text-[11px] bg-transparent font-medium h-7" disabled={!fab.mainType || (!isCurtain && !fab.subType)} placeholder="-พิมพ์ค้นหารุ่น-"/>
               <datalist id={nameListId}>{nameOptions.map(o=><option key={o} value={o}/>)}</datalist>
             </div>
             <div className="w-1/2 relative">
-              <input list={colorListId} value={fab.color} onChange={(e)=>updateFabric(item.id, area.id, fab.id, {color: e.target.value})} className="w-full border-b border-gray-300 outline-none text-[11px] bg-transparent font-medium text-gray-600 h-7" disabled={!fab.name} placeholder="-พิมพ์ค้นหาสี-"/>
+              <input list={colorListId} value={fab.color} onChange={(e)=> {
+                 const colVal = e.target.value;
+                 let foundImg = '';
+                 const nVal = (fab.name || '').trim().toLowerCase();
+                 const cVal = colVal.trim().toLowerCase();
+                 if (isCustom) {
+                   foundImg = (generalInfo.customFabrics || []).find((f: any) => 
+                     (f.name || '').trim().toLowerCase() === nVal && 
+                     (f.color || '').trim().toLowerCase() === cVal
+                   )?.image || '';
+                 } else if (appDB?.curtainTypes) {
+                   for (const cat of Object.keys(appDB.curtainTypes)) {
+                     for (const sub of Object.keys(appDB.curtainTypes[cat] || {})) {
+                       const fMap = appDB.curtainTypes[cat][sub];
+                       if (fMap) {
+                         for (const mn of Object.keys(fMap)) {
+                           if (mn.trim().toLowerCase() === nVal) {
+                             for (const cn of Object.keys(fMap[mn] || {})) {
+                               if (cn.trim().toLowerCase() === cVal) {
+                                 foundImg = fMap[mn][cn];
+                                 break;
+                               }
+                             }
+                           }
+                           if (foundImg) break;
+                         }
+                       }
+                       if (foundImg) break;
+                     }
+                     if (foundImg) break;
+                   }
+                 }
+                 updateFabric(item.id, area.id, fab.id, {color: colVal, ...(foundImg ? { image: foundImg } : {})});
+              }} className="w-full border-b border-gray-300 outline-none text-[11px] bg-transparent font-medium text-gray-600 h-7" disabled={!fab.name} placeholder="-พิมพ์ค้นหาสี-"/>
               <datalist id={colorListId}>{colorOptions.map(o=><option key={o} value={o}/>)}</datalist>
             </div>
           </div>
